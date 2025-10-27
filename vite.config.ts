@@ -8,6 +8,7 @@ export default defineConfig({
     port: 3400,
     strictPort: true,
     host: true,
+    allowedHosts: ['tracker.bawebtech.com'],
   },
   preview: {
     port: 3400,
