@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
-import { api, Entry, formatCivilTZ, formatDayMonTZ, User, ymdInTZ } from './api'
+import { api, Entry, formatCivilTZ, formatDayMonTZ, formatDuration, User, ymdInTZ } from './api'
 
 type Site = 'clinic' | 'remote'
 
@@ -210,13 +210,27 @@ function App() {
           <h3 style={{ margin: '16px 0 8px' }}>Recent</h3>
           <div>
             {entries.map((e) => {
-              const start = toTZ(e.start_iso || e.start_utc)
-              const stop = e.stop_iso ? toTZ(e.stop_iso) : null
+              let dateForDisplay: Date
+              if (e.start_iso) {
+                dateForDisplay = new Date(e.start_iso)
+              } else if (e.start_local_date) {
+                const v = (e as any).start_local_date as string
+                // If server serialized DATE as ISO with time, use it directly; else append a midday time
+                dateForDisplay = new Date(v.includes('T') ? v : `${v}T12:00:00Z`)
+              } else {
+                dateForDisplay = new Date()
+              }
+              const start = e.start_iso ? new Date(e.start_iso) : null
+              const stop = e.stop_iso ? new Date(e.stop_iso) : null
+              const dur = (typeof e.duration_min === 'number')
+                ? e.duration_min
+                : (start && stop ? Math.round((+stop - +start) / 60000) : null)
               return (
                 <div key={e.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' }}>
-                  <div style={{ width: '40%' }}>{formatDayMonTZ(start, tz)}</div>
-                  <div style={{ width: '30%', textAlign: 'center' }}>{formatCivilTZ(start, tz)}</div>
-                  <div style={{ width: '30%', textAlign: 'center' }}>{stop ? formatCivilTZ(stop, tz) : '—'}</div>
+                  <div style={{ width: '34%' }}>{formatDayMonTZ(dateForDisplay, tz)}</div>
+                  <div style={{ width: '22%', textAlign: 'center' }}>{start ? formatCivilTZ(start, tz) : '—'}</div>
+                  <div style={{ width: '22%', textAlign: 'center' }}>{stop ? formatCivilTZ(stop, tz) : '—'}</div>
+                  <div style={{ width: '22%', textAlign: 'right', fontVariantNumeric: 'tabular-nums' as any }}>{formatDuration(dur ?? null)}</div>
                 </div>
               )
             })}
@@ -341,6 +355,8 @@ function NewEntryScreen(props: { defaultSite: Site, defaultEvents: string[], all
   const [startTime, setStartTime] = useState<string>('')
   const [stopDate, setStopDate] = useState<string>('')
   const [stopTime, setStopTime] = useState<string>('')
+  const [durH, setDurH] = useState<string>('')
+  const [durM, setDurM] = useState<string>('')
   const [submitting, setSubmitting] = useState(false)
 
   function toggleEvent(name: string) {
@@ -352,10 +368,45 @@ function NewEntryScreen(props: { defaultSite: Site, defaultEvents: string[], all
     return new Date(`${date}T${time}:00Z`).toISOString()
   }
 
+  // Derive stop time when duration is provided; assume stop date = start date
+  useEffect(() => {
+    if (!startDate || !startTime) return
+    const h = parseInt(durH || '0', 10)
+    const m = parseInt(durM || '0', 10)
+    if (isNaN(h) && isNaN(m)) return
+    const base = new Date(`${startDate}T${startTime}:00Z`)
+    if (Number.isFinite(h)) base.setHours(base.getHours() + (h || 0))
+    if (Number.isFinite(m)) base.setMinutes(base.getMinutes() + (m || 0))
+    const hh = String(base.getUTCHours()).padStart(2, '0')
+    const mm = String(base.getUTCMinutes()).padStart(2, '0')
+    setStopDate(startDate) // per requirement: same day
+    setStopTime(`${hh}:${mm}`)
+  }, [startDate, startTime, durH, durM])
+
   async function submitManual() {
+    const hasDuration = !!(durH || durM)
+    // Duration-only branch: requires start date and hours/minutes; start time optional
+    if (hasDuration) {
+      if (!startDate) return alert('Please select a start date')
+      const h = durH ? parseInt(durH, 10) : null
+      const m = durM ? parseInt(durM, 10) : null
+      if ((!h && !m) || ((h ?? 0) === 0 && (m ?? 0) === 0)) return alert('Please enter a positive duration')
+      setSubmitting(true)
+      try {
+        await api.manualDuration(site, events, startDate, h, m, notes)
+        await props.onCreated()
+      } catch (err:any) {
+        alert(err?.data?.error || 'Create failed')
+      } finally {
+        setSubmitting(false)
+      }
+      return
+    }
+
+    // Start/Stop branch: requires both times
     const s = toIso(startDate, startTime)
     const e = toIso(stopDate || startDate, stopTime)
-    if (!s || !e) return alert('Please fill start and stop date/time')
+    if (!s || !e) return alert('Please fill start and stop time')
     setSubmitting(true)
     try {
       await api.manual(site, events, s, e, notes)
@@ -403,30 +454,34 @@ function NewEntryScreen(props: { defaultSite: Site, defaultEvents: string[], all
           />
         </div>
         <div style={{ minWidth: 0 }}>
-          <label style={{ display: 'block', marginBottom: 6, fontWeight: 600, fontSize: 16 }}>Start Time</label>
+          <label style={{ display: 'block', marginBottom: 6, fontWeight: 600, fontSize: 16, textAlign: 'right' }}>Start Time</label>
           <input
             type="time"
             value={startTime}
             onChange={e=>setStartTime(e.target.value)}
-            style={{ width:'80%', maxWidth:'100%', padding: '8px', borderRadius: 8, border: '1px solid #ccc', boxSizing: 'border-box', fontSize: 18, minHeight: 44 }}
+            style={{ width:'80%', maxWidth:'100%', padding: '8px', borderRadius: 8, border: '1px solid #ccc', boxSizing: 'border-box', fontSize: 18, minHeight: 44, display: 'block', marginLeft: 'auto' }}
           />
         </div>
         <div style={{ minWidth: 0 }}>
-          <label style={{ display: 'block', marginBottom: 6, fontWeight: 600, fontSize: 16 }}>Stop Date</label>
-          <input
-            type="date"
-            value={stopDate}
-            onChange={e=>setStopDate(e.target.value)}
-            style={{ width:'80%', maxWidth:'100%', padding: '8px', borderRadius: 8, border: '1px solid #ccc', boxSizing: 'border-box', fontSize: 18, minHeight: 44 }}
-          />
+          <label style={{ display: 'block', marginBottom: 6, fontWeight: 600, fontSize: 16 }}>Total Time</label>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <select value={durH} onChange={(e)=>setDurH(e.target.value)} style={{ width: '44%', flex: '0 0 44%', padding: '8px', borderRadius: 8, border: '1px solid #ccc', fontSize: 18, minHeight: 44 }}>
+              <option value="" disabled hidden>hh</option>
+              {[...Array(8)].map((_,i)=>(<option key={i+1} value={String(i+1)}>{i+1}</option>))}
+            </select>
+            <select value={durM} onChange={(e)=>setDurM(e.target.value)} style={{ width: '44%', flex: '0 0 44%', padding: '8px', borderRadius: 8, border: '1px solid #ccc', fontSize: 18, minHeight: 44 }}>
+              <option value="" disabled hidden>mm</option>
+              {[15,30,45].map((v)=>(<option key={v} value={String(v)}>{v}</option>))}
+            </select>
+          </div>
         </div>
         <div style={{ minWidth: 0 }}>
-          <label style={{ display: 'block', marginBottom: 6, fontWeight: 600, fontSize: 16 }}>Stop Time</label>
+          <label style={{ display: 'block', marginBottom: 6, fontWeight: 600, fontSize: 16, textAlign: 'right' }}>Stop Time</label>
           <input
             type="time"
             value={stopTime}
-            onChange={e=>setStopTime(e.target.value)}
-            style={{ width:'80%', maxWidth:'100%', padding: '8px', borderRadius: 8, border: '1px solid #ccc', boxSizing: 'border-box', fontSize: 18, minHeight: 44 }}
+            readOnly
+            style={{ width:'80%', maxWidth:'100%', padding: '8px', borderRadius: 8, border: '1px solid #fff', boxSizing: 'border-box', fontSize: 18, minHeight: 44, background: 'transparent', display: 'block', marginLeft: 'auto' }}
           />
         </div>
       </div>

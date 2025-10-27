@@ -8,6 +8,8 @@ export type Entry = {
   notes: string | null
   start_iso?: string
   stop_iso?: string | null
+  start_local_date?: string
+  duration_min?: number
 }
 
 const base = '' // same-origin via nginx
@@ -46,6 +48,14 @@ export const api = {
   stop: () => request<{ id: number; stop_utc: string }>('/api/entries/stop', { method: 'POST' }),
   manual: (site: 'clinic'|'remote', events: string[], start_utc: string, stop_utc: string, notes: string) =>
     request<{ id: number }>('/api/entries', { method: 'POST', body: JSON.stringify({ site, events, start_utc, stop_utc, notes }) }),
+  manualDuration: (site: 'clinic'|'remote', events: string[], start_local_date: string, hours: number | null, minutes: number | null, notes: string) =>
+    request<{ id: number }>(
+      '/api/entries',
+      {
+        method: 'POST',
+        body: JSON.stringify({ site, events, start_local_date, hours, minutes, notes }),
+      }
+    ),
   list: (limit = 20) => request<{ entries: Entry[] }>(`/api/entries?limit=${limit}`),
 }
 
@@ -67,6 +77,7 @@ export function formatDayMon(t: Date): string {
 }
 
 export function formatCivilTZ(d: Date, tz: string): string {
+  if (!(d instanceof Date) || isNaN(d.getTime())) return '—'
   const fmt = new Intl.DateTimeFormat('en-US', {
     hour12: true,
     hour: 'numeric',
@@ -82,6 +93,7 @@ export function formatCivilTZ(d: Date, tz: string): string {
 }
 
 export function formatDayMonTZ(d: Date, tz: string): string {
+  if (!(d instanceof Date) || isNaN(d.getTime())) return ''
   const wd = new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: tz }).format(d)
   const mm = new Intl.DateTimeFormat('en-US', { month: '2-digit', timeZone: tz }).format(d)
   const dd = new Intl.DateTimeFormat('en-US', { day: '2-digit', timeZone: tz }).format(d)
@@ -94,4 +106,13 @@ export function ymdInTZ(d: Date, tz: string): string {
   const m = new Intl.DateTimeFormat('en-US', { month: '2-digit', timeZone: tz }).format(d)
   const day = new Intl.DateTimeFormat('en-US', { day: '2-digit', timeZone: tz }).format(d)
   return `${y}-${m}-${day}`
+}
+
+export function formatDuration(mins: number | null | undefined): string {
+  if (mins == null || mins < 0) return '—'
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  const pad2 = (n: number) => (n < 10 ? `0${n}` : String(n))
+  if (h > 0) return `${h}:${pad2(m)}`
+  return `:${pad2(m)}`
 }

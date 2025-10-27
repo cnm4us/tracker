@@ -6,6 +6,14 @@ import { requireAuth } from '../middleware/auth'
 
 export const entriesRouter = express.Router()
 
+function ymdInTZ(d: Date, tz: string): string {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(d)
+  const y = parts.find(p => p.type === 'year')?.value ?? '1970'
+  const m = parts.find(p => p.type === 'month')?.value ?? '01'
+  const day = parts.find(p => p.type === 'day')?.value ?? '01'
+  return `${y}-${m}-${day}`
+}
+
 // Start a new active entry
 entriesRouter.post('/start', requireAuth, async (req: AuthedRequest, res: Response) => {
   const { site, events, notes } = req.body || {}
@@ -18,7 +26,11 @@ entriesRouter.post('/start', requireAuth, async (req: AuthedRequest, res: Respon
       const [active] = await conn.query('SELECT id FROM entries WHERE user_id = ? AND stop_utc IS NULL LIMIT 1', [userId])
       if ((active as any[]).length) return res.status(409).json({ error: 'An entry is already active' })
 
-      const [r] = await conn.query('INSERT INTO entries (user_id, site, start_utc, notes) VALUES (?, ?, ?, ?)', [userId, site, now, notes || null])
+      const startLocalDate = ymdInTZ(now, req.user!.tz || 'UTC')
+      const [r] = await conn.query(
+        'INSERT INTO entries (user_id, site, start_local_date, start_utc, notes) VALUES (?, ?, ?, ?, ?)',
+        [userId, site, startLocalDate, now, notes || null]
+      )
       const entryId = (r as any).insertId as number
 
       if (Array.isArray(events) && events.length) {
@@ -47,7 +59,7 @@ entriesRouter.post('/stop', requireAuth, async (req: AuthedRequest, res: Respons
       const arr = rows as any[]
       if (!arr.length) return res.status(404).json({ error: 'No active entry' })
       const entry = arr[0]
-      await conn.query('UPDATE entries SET stop_utc = ? WHERE id = ?', [now, entry.id])
+      await conn.query('UPDATE entries SET stop_utc = ?, duration_min = TIMESTAMPDIFF(MINUTE, start_utc, ?) WHERE id = ?', [now, now, entry.id])
       res.json({ id: entry.id, stop_utc: now.toISOString() })
     })
   } catch (err) {
@@ -57,19 +69,38 @@ entriesRouter.post('/stop', requireAuth, async (req: AuthedRequest, res: Respons
 
 // Manual create (New)
 entriesRouter.post('/', requireAuth, async (req: AuthedRequest, res: Response) => {
-  const { site, events, start_utc, stop_utc, notes } = req.body || {}
+  const { site, events, start_utc, stop_utc, notes, start_local_date, duration_min, hours, minutes } = req.body || {}
   if (!site || !['clinic', 'remote'].includes(site)) return res.status(400).json({ error: 'site required' })
-  if (!start_utc || !stop_utc) return res.status(400).json({ error: 'start_utc and stop_utc required' })
-  const start = new Date(start_utc)
-  const stop = new Date(stop_utc)
-  if (!(start instanceof Date) || isNaN(start.getTime()) || !(stop instanceof Date) || isNaN(stop.getTime())) {
-    return res.status(400).json({ error: 'Invalid date format' })
+  let start: Date | null = null
+  let stop: Date | null = null
+  let dur: number | null = null
+
+  if (start_utc && stop_utc) {
+    start = new Date(start_utc)
+    stop = new Date(stop_utc)
+    if (!(start instanceof Date) || isNaN(start.getTime()) || !(stop instanceof Date) || isNaN(stop.getTime())) {
+      return res.status(400).json({ error: 'Invalid date format' })
+    }
+    if (stop <= start) return res.status(400).json({ error: 'stop must be after start' })
+    dur = Math.max(0, Math.floor((+stop - +start) / 60000))
+  } else {
+    const h = hours != null ? parseInt(String(hours), 10) : NaN
+    const m = minutes != null ? parseInt(String(minutes), 10) : NaN
+    const dm = duration_min != null ? parseInt(String(duration_min), 10) : NaN
+    if (!start_local_date) return res.status(400).json({ error: 'start_local_date required for duration entries' })
+    if (isNaN(dm) && isNaN(h) && isNaN(m)) return res.status(400).json({ error: 'duration_min or hours/minutes required' })
+    dur = !isNaN(dm) ? dm : ((isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m))
+    if (!dur || dur <= 0) return res.status(400).json({ error: 'duration must be positive' })
   }
-  if (stop <= start) return res.status(400).json({ error: 'stop must be after start' })
   const userId = req.user!.id
   try {
     await withConn(async (conn) => {
-      const [r] = await conn.query('INSERT INTO entries (user_id, site, start_utc, stop_utc, notes) VALUES (?, ?, ?, ?, ?)', [userId, site, start, stop, notes || null])
+      const localDate = start_local_date || (start ? String(start.toISOString().slice(0, 10)) : null)
+      if (!localDate) return res.status(400).json({ error: 'start_local_date required' })
+      const [r] = await conn.query(
+        'INSERT INTO entries (user_id, site, start_local_date, start_utc, stop_utc, duration_min, notes) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [userId, site, localDate, start, stop, dur, notes || null]
+      )
       const entryId = (r as any).insertId as number
       if (Array.isArray(events) && events.length) {
         const [eventRows] = await conn.query('SELECT id, name FROM event_types WHERE active = 1')
@@ -90,7 +121,7 @@ entriesRouter.post('/', requireAuth, async (req: AuthedRequest, res: Response) =
 // Update existing entry (edit)
 entriesRouter.patch('/:id', requireAuth, async (req: AuthedRequest, res: Response) => {
   const id = Number(req.params.id)
-  const { site, events, start_utc, stop_utc, notes } = req.body || {}
+  const { site, events, start_utc, stop_utc, notes, start_local_date, duration_min, hours, minutes } = req.body || {}
   if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid id' })
   const userId = req.user!.id
   try {
@@ -100,11 +131,22 @@ entriesRouter.patch('/:id', requireAuth, async (req: AuthedRequest, res: Respons
       if (!arr.length) return res.status(404).json({ error: 'Not found' })
       const existing = arr[0]
 
-      const start = start_utc ? new Date(start_utc) : new Date(existing.start_utc)
-      const stop = stop_utc ? new Date(stop_utc) : (existing.stop_utc ? new Date(existing.stop_utc) : null)
-      if (stop && stop <= start) return res.status(400).json({ error: 'stop must be after start' })
+      let start: Date | null = existing.start_utc ? new Date(existing.start_utc) : null
+      let stop: Date | null = existing.stop_utc ? new Date(existing.stop_utc) : null
+      let dur: number | null = existing.duration_min || null
+      if (start_utc !== undefined) start = start_utc ? new Date(start_utc) : null
+      if (stop_utc !== undefined) stop = stop_utc ? new Date(stop_utc) : null
+      if (start && stop && stop <= start) return res.status(400).json({ error: 'stop must be after start' })
+      const h = hours != null ? parseInt(String(hours), 10) : NaN
+      const m = minutes != null ? parseInt(String(minutes), 10) : NaN
+      const dm = duration_min != null ? parseInt(String(duration_min), 10) : NaN
+      if (!isNaN(dm)) dur = dm
+      else if (!isNaN(h) || !isNaN(m)) dur = (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m)
+      else if (start && stop) dur = Math.max(0, Math.floor((+stop - +start) / 60000))
+
       const newSite = site && ['clinic', 'remote'].includes(site) ? site : existing.site
-      await conn.query('UPDATE entries SET site = ?, start_utc = ?, stop_utc = ?, notes = ? WHERE id = ?', [newSite, start, stop, notes ?? existing.notes, id])
+      const newLocalDate = start_local_date || (start ? String(start.toISOString().slice(0, 10)) : existing.start_local_date)
+      await conn.query('UPDATE entries SET site = ?, start_local_date = ?, start_utc = ?, stop_utc = ?, duration_min = ?, notes = ? WHERE id = ?', [newSite, newLocalDate, start, stop, dur, notes ?? existing.notes, id])
 
       if (Array.isArray(events)) {
         await conn.query('DELETE FROM entry_events WHERE entry_id = ?', [id])
@@ -133,11 +175,11 @@ entriesRouter.get('/', requireAuth, async (req: AuthedRequest, res: Response) =>
     await withConn(async (conn) => {
       const [rows] = await conn.query(
         `SELECT e.*, 
-                DATE_FORMAT(CONVERT_TZ(e.start_utc, '+00:00', '+00:00'), '%Y-%m-%dT%H:%i:%s.%fZ') as start_iso,
-                IFNULL(DATE_FORMAT(CONVERT_TZ(e.stop_utc, '+00:00', '+00:00'), '%Y-%m-%dT%H:%i:%s.%fZ'), NULL) as stop_iso
+                DATE_FORMAT(e.start_utc, '%Y-%m-%dT%H:%i:%sZ') as start_iso,
+                IFNULL(DATE_FORMAT(e.stop_utc, '%Y-%m-%dT%H:%i:%sZ'), NULL) as stop_iso
          FROM entries e
          WHERE e.user_id = ?
-         ORDER BY e.start_utc DESC
+         ORDER BY COALESCE(e.start_utc, TIMESTAMP(e.start_local_date), e.created_at) DESC
          LIMIT ?`,
         [userId, limit]
       )
