@@ -56,15 +56,15 @@ export function formatCivil(t: Date): string {
   const am = h < 12
   const hh = ((h + 11) % 12) + 1
   const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`)
-  return `${hh}:${pad(m)}:${pad(s)} ${am ? 'a.m.' : 'p.m.'}`
+  return `${hh}:${pad(m)}:${pad(s)} ${am ? 'am' : 'pm'}`
 }
 
 export function formatDayMon(t: Date): string {
-  const days = ['Sun.', 'Mon.', 'Tue.', 'Wed.', 'Thu.', 'Fri.', 'Sat.']
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
   const mon = t.getMonth() + 1
   const day = t.getDate()
   const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`)
-  return `${days[t.getDay()]} : ${pad(mon)}-${pad(day)}`
+  return `${days[t.getDay()]} (${pad(mon)}/${pad(day)})`
 }
 
 export function formatCivilTZ(d: Date, tz: string): string {
@@ -80,7 +80,7 @@ export function formatCivilTZ(d: Date, tz: string): string {
   const m = parts.find(p => p.type === 'minute')?.value || '00'
   const s = parts.find(p => p.type === 'second')?.value || '00'
   const dayPeriod = parts.find(p => p.type === 'dayPeriod')?.value || 'AM'
-  const period = /am/i.test(dayPeriod) ? 'a.m.' : 'p.m.'
+  const period = /am/i.test(dayPeriod) ? 'am' : 'pm'
   return `${h}:${m}:${s} ${period}`
 }
 
@@ -88,8 +88,8 @@ export function formatDayMonTZ(d: Date, tz: string): string {
   const wd = new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: tz }).format(d)
   const mm = new Intl.DateTimeFormat('en-US', { month: '2-digit', timeZone: tz }).format(d)
   const dd = new Intl.DateTimeFormat('en-US', { day: '2-digit', timeZone: tz }).format(d)
-  const wdDot = wd.endsWith('.') ? wd : `${wd}.`
-  return `${wdDot} : ${mm}-${dd}`
+  // e.g., Mon (10/27)
+  return `${wd} (${mm}/${dd})`
 }
 
 export function ymdInTZ(d: Date, tz: string): string {
