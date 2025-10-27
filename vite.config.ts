@@ -9,6 +9,11 @@ export default defineConfig({
     strictPort: true,
     host: true,
     allowedHosts: ['tracker.bawebtech.com'],
+    hmr: {
+      host: 'tracker.bawebtech.com',
+      clientPort: 443,
+      protocol: 'wss',
+    },
   },
   preview: {
     port: 3400,

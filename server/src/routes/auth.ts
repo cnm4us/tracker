@@ -3,6 +3,7 @@ import express from 'express'
 import { withConn } from '../db'
 import { env } from '../env'
 import { generateToken, hashPassword, sha256Hex, verifyPassword } from '../utils/crypto'
+import { requireAuth } from '../middleware/auth'
 
 function cookieOptions(req: Request) {
   const isHttps = (req.headers['x-forwarded-proto'] === 'https') || req.protocol === 'https'
@@ -142,3 +143,19 @@ authRouter.get('/me', async (req: Request, res: Response) => {
   }
 })
 
+// Update current user (timezone for now)
+authRouter.patch('/me', requireAuth as any, async (req: Request, res: Response) => {
+  const { tz } = req.body || {}
+  if (!tz) return res.status(400).json({ error: 'tz required' })
+  try {
+    await withConn(async (conn) => {
+      await conn.query('UPDATE users SET tz = ? WHERE id = (SELECT user_id FROM sessions WHERE token_hash = ? LIMIT 1)', [
+        tz,
+        sha256Hex((req as any).cookies?.rt as string),
+      ])
+      res.json({ ok: true })
+    })
+  } catch (err) {
+    res.status(500).json({ error: 'Update failed' })
+  }
+})
