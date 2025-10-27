@@ -173,15 +173,15 @@ function App() {
           </div>
 
           <div style={{ margin: '12px 0' }}>
-            <label style={{ display: 'block', marginBottom: 8, fontWeight: 600 }}>Site</label>
-            <div style={rowStyle}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <span style={{ fontWeight: 600 }}>Site:</span>
               <label><input type="radio" name="site" checked={site==='clinic'} onChange={()=>setSite('clinic')} /> Clinic</label>
               <label><input type="radio" name="site" checked={site==='remote'} onChange={()=>setSite('remote')} /> Remote</label>
             </div>
           </div>
 
           <div style={{ margin: '12px 0' }}>
-            <label style={{ display: 'block', marginBottom: 8, fontWeight: 600 }}>Events</label>
+            <label style={{ display: 'block', marginBottom: 8, fontWeight: 600 }}>Events:</label>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
               {allEvents.map((name) => (
                 <label key={name} style={{ display: 'flex', alignItems: 'center', gap: 6, overflowWrap: 'anywhere' }}>
@@ -192,7 +192,6 @@ function App() {
           </div>
 
           <div style={{ margin: '12px 0' }}>
-            <label style={{ display: 'block', marginBottom: 8, fontWeight: 600 }}>Notes</label>
             <textarea
               value={notes}
               onChange={e=>setNotes(e.target.value)}
@@ -371,13 +370,15 @@ function NewEntryScreen(props: { defaultSite: Site, defaultEvents: string[], all
   return (
     <div>
       <div style={{ marginTop: 12 }}>
-        <div style={{ marginBottom: 8, fontWeight: 600 }}>Site</div>
-        <label><input type="radio" name="m-site" checked={site==='clinic'} onChange={()=>setSite('clinic')} /> Clinic</label>
-        <label style={{ marginLeft: 12 }}><input type="radio" name="m-site" checked={site==='remote'} onChange={()=>setSite('remote')} /> Remote</label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <span style={{ fontWeight: 600 }}>Site:</span>
+          <label><input type="radio" name="m-site" checked={site==='clinic'} onChange={()=>setSite('clinic')} /> Clinic</label>
+          <label><input type="radio" name="m-site" checked={site==='remote'} onChange={()=>setSite('remote')} /> Remote</label>
+        </div>
       </div>
 
       <div style={{ margin: '12px 0' }}>
-        <label style={{ display: 'block', marginBottom: 8, fontWeight: 600 }}>Events</label>
+        <label style={{ display: 'block', marginBottom: 8, fontWeight: 600 }}>Events:</label>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
           {props.allEvents.map((name) => (
             <label key={name} style={{ display: 'flex', alignItems: 'center', gap: 6, overflowWrap: 'anywhere' }}>
@@ -388,7 +389,6 @@ function NewEntryScreen(props: { defaultSite: Site, defaultEvents: string[], all
       </div>
 
       <div style={{ margin: '12px 0' }}>
-        <label style={{ display: 'block', marginBottom: 8, fontWeight: 600 }}>Notes</label>
         <textarea value={notes} onChange={e=>setNotes(e.target.value)} rows={2} style={{ width: '100%', padding: 8, borderRadius: 8, border: '1px solid #ccc', resize: 'vertical', boxSizing: 'border-box' }} placeholder="Optional notes" />
       </div>
 

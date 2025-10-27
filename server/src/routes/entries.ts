@@ -6,25 +6,6 @@ import { requireAuth } from '../middleware/auth'
 
 export const entriesRouter = express.Router()
 
-// Utility: overlap detection
-async function hasOverlap(conn: any, userId: number, start: Date, stop: Date | null, excludeId?: number) {
-  // Overlap if any entry intersects [start, stop] (open interval if stop is null)
-  // Query: existing.start < new.stop AND (existing.stop IS NULL OR existing.stop > new.start)
-  const args: any[] = [userId, start]
-  let sql = `SELECT id FROM entries WHERE user_id = ? AND (stop_utc IS NULL OR stop_utc > ?) `
-  if (stop) {
-    sql += `AND start_utc < ? `
-    args.push(stop)
-  }
-  if (excludeId) {
-    sql += `AND id <> ? `
-    args.push(excludeId)
-  }
-  sql += 'LIMIT 1'
-  const [rows] = await conn.query(sql, args)
-  return (rows as any[]).length > 0
-}
-
 // Start a new active entry
 entriesRouter.post('/start', requireAuth, async (req: AuthedRequest, res: Response) => {
   const { site, events, notes } = req.body || {}
@@ -36,10 +17,6 @@ entriesRouter.post('/start', requireAuth, async (req: AuthedRequest, res: Respon
       // Ensure no active entry exists
       const [active] = await conn.query('SELECT id FROM entries WHERE user_id = ? AND stop_utc IS NULL LIMIT 1', [userId])
       if ((active as any[]).length) return res.status(409).json({ error: 'An entry is already active' })
-
-      // Ensure no overlap with existing entries (start now)
-      const overlap = await hasOverlap(conn, userId, now, null)
-      if (overlap) return res.status(409).json({ error: 'Overlaps an existing entry' })
 
       const [r] = await conn.query('INSERT INTO entries (user_id, site, start_utc, notes) VALUES (?, ?, ?, ?)', [userId, site, now, notes || null])
       const entryId = (r as any).insertId as number
@@ -70,9 +47,6 @@ entriesRouter.post('/stop', requireAuth, async (req: AuthedRequest, res: Respons
       const arr = rows as any[]
       if (!arr.length) return res.status(404).json({ error: 'No active entry' })
       const entry = arr[0]
-      // Check overlap with future entries
-      const overlap = await hasOverlap(conn, userId, entry.start_utc, now, entry.id)
-      if (overlap) return res.status(409).json({ error: 'Stop time overlaps an entry' })
       await conn.query('UPDATE entries SET stop_utc = ? WHERE id = ?', [now, entry.id])
       res.json({ id: entry.id, stop_utc: now.toISOString() })
     })
@@ -95,8 +69,6 @@ entriesRouter.post('/', requireAuth, async (req: AuthedRequest, res: Response) =
   const userId = req.user!.id
   try {
     await withConn(async (conn) => {
-      const overlap = await hasOverlap(conn, userId, start, stop)
-      if (overlap) return res.status(409).json({ error: 'Overlapping entries are not allowed' })
       const [r] = await conn.query('INSERT INTO entries (user_id, site, start_utc, stop_utc, notes) VALUES (?, ?, ?, ?, ?)', [userId, site, start, stop, notes || null])
       const entryId = (r as any).insertId as number
       if (Array.isArray(events) && events.length) {
@@ -131,9 +103,6 @@ entriesRouter.patch('/:id', requireAuth, async (req: AuthedRequest, res: Respons
       const start = start_utc ? new Date(start_utc) : new Date(existing.start_utc)
       const stop = stop_utc ? new Date(stop_utc) : (existing.stop_utc ? new Date(existing.stop_utc) : null)
       if (stop && stop <= start) return res.status(400).json({ error: 'stop must be after start' })
-      const overlap = await hasOverlap(conn, userId, start, stop, id)
-      if (overlap) return res.status(409).json({ error: 'Overlapping entries are not allowed' })
-
       const newSite = site && ['clinic', 'remote'].includes(site) ? site : existing.site
       await conn.query('UPDATE entries SET site = ?, start_utc = ?, stop_utc = ?, notes = ? WHERE id = ?', [newSite, start, stop, notes ?? existing.notes, id])
 
@@ -178,4 +147,3 @@ entriesRouter.get('/', requireAuth, async (req: AuthedRequest, res: Response) =>
     res.status(500).json({ error: 'List failed' })
   }
 })
-

@@ -52,11 +52,10 @@ export const api = {
 export function formatCivil(t: Date): string {
   const h = t.getHours()
   const m = t.getMinutes()
-  const s = t.getSeconds()
   const am = h < 12
   const hh = ((h + 11) % 12) + 1
   const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`)
-  return `${hh}:${pad(m)}:${pad(s)} ${am ? 'am' : 'pm'}`
+  return `${hh}:${pad(m)} ${am ? 'am' : 'pm'}`
 }
 
 export function formatDayMon(t: Date): string {
@@ -72,16 +71,14 @@ export function formatCivilTZ(d: Date, tz: string): string {
     hour12: true,
     hour: 'numeric',
     minute: '2-digit',
-    second: '2-digit',
     timeZone: tz,
   })
   const parts = fmt.formatToParts(d)
   const h = parts.find(p => p.type === 'hour')?.value || '0'
   const m = parts.find(p => p.type === 'minute')?.value || '00'
-  const s = parts.find(p => p.type === 'second')?.value || '00'
   const dayPeriod = parts.find(p => p.type === 'dayPeriod')?.value || 'AM'
   const period = /am/i.test(dayPeriod) ? 'am' : 'pm'
-  return `${h}:${m}:${s} ${period}`
+  return `${h}:${m} ${period}`
 }
 
 export function formatDayMonTZ(d: Date, tz: string): string {
