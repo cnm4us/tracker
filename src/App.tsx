@@ -42,6 +42,7 @@ function App() {
   const [events, setEvents] = useState<string[]>([])
   const [allEvents, setAllEvents] = useState<string[]>([])
   const [notes, setNotes] = useState('')
+  const [notesRows, setNotesRows] = useState(2)
 
   const [entries, setEntries] = useState<Entry[]>([])
   const [activeEntry, setActiveEntry] = useState<Entry | null>(null)
@@ -209,7 +210,9 @@ function App() {
             <textarea
               value={notes}
               onChange={e=>setNotes(e.target.value)}
-              rows={2}
+              rows={notesRows}
+              onFocus={()=>setNotesRows(4)}
+              onBlur={()=>setNotesRows(2)}
               className="avoidZoom"
               style={{ width: '100%', padding: 8, borderRadius: 8, border: '1px solid #ccc', resize: 'vertical', boxSizing: 'border-box' }}
               placeholder="Optional notes"
@@ -241,8 +244,8 @@ function App() {
                 ? e.duration_min
                 : (start && stop ? Math.round((+stop - +start) / 60000) : null)
               return (
-                <div key={e.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' }}>
-                  <div style={{ width: '34%', cursor: 'pointer', textDecoration: 'underline' }} onClick={()=>{ setEditing(e); setView('edit') }}>{formatDayMonTZ(dateForDisplay, tz)}</div>
+                <div key={e.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid rgba(238,238,238,0.5)' }}>
+                  <div style={{ width: '34%', cursor: 'pointer', textDecoration: 'none', color: '#ffb616' }} onClick={()=>{ setEditing(e); setView('edit') }}>{formatDayMonTZ(dateForDisplay, tz)}</div>
                   <div style={{ width: '22%', textAlign: 'center' }}>{start ? formatCivilTZ(start, tz) : '—'}</div>
                   <div style={{ width: '22%', textAlign: 'center' }}>{stop ? formatCivilTZ(stop, tz) : '—'}</div>
                   <div style={{ width: '22%', textAlign: 'right', fontVariantNumeric: 'tabular-nums' as any }}>{formatDuration(dur ?? null)}</div>
@@ -394,6 +397,7 @@ function NewEntryScreen(props: { mode?: 'new'|'edit', entry?: Entry, defaultSite
   const [durH, setDurH] = useState<string>('')
   const [durM, setDurM] = useState<string>('')
   const [submitting, setSubmitting] = useState(false)
+  const [noteRows, setNoteRows] = useState(2)
 
   useEffect(() => {
     if (props.entry && props.entry.duration_min != null) {
@@ -511,7 +515,16 @@ function NewEntryScreen(props: { mode?: 'new'|'edit', entry?: Entry, defaultSite
       </div>
 
       <div style={{ margin: '12px 0' }}>
-        <textarea className="avoidZoom" value={notes} onChange={e=>setNotes(e.target.value)} rows={2} style={{ width: '100%', padding: 8, borderRadius: 8, border: '1px solid #ccc', resize: 'vertical', boxSizing: 'border-box' }} placeholder="Optional notes" />
+        <textarea
+          className="avoidZoom"
+          value={notes}
+          onChange={e=>setNotes(e.target.value)}
+          rows={noteRows}
+          onFocus={()=>setNoteRows(4)}
+          onBlur={()=>setNoteRows(2)}
+          style={{ width: '100%', padding: 8, borderRadius: 8, border: '1px solid #ccc', resize: 'vertical', boxSizing: 'border-box' }}
+          placeholder="Optional notes"
+        />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>

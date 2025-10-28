@@ -35,6 +35,12 @@ input, select, textarea { font-size: 16px; }
 .avoidZoom { font-size: 17px; }
 html { -webkit-text-size-adjust: 100%; }
 
+/* Brand accent for checkboxes and radios */
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: #ffb616;
+}
+
 /* Normalize time input appearance/height across browsers (esp. iOS Safari) */
 .timeField {
   height: 44px;
