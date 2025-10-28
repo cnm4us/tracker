@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { api, formatCivilPartsTZ, formatDayMonTZ, formatDuration, ymdInTZ } from './api'
 import type { Entry, User } from './api'
@@ -51,6 +51,11 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [view, setView] = useState<'time' | 'settings' | 'login' | 'register' | 'new' | 'edit' | 'search'>('login')
+  const [returnView, setReturnView] = useState<'time'|'search'|null>(null)
+  type SearchState = { begin: string; end: string; site: 'all'|'clinic'|'remote'; events: string[]; results: Entry[] }
+  const defaultBegin = useMemo(() => { const d=new Date(); d.setDate(d.getDate()-7); const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}` }, [])
+  const defaultEnd = useMemo(() => { const d=new Date(); const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}` }, [])
+  const [searchState, setSearchState] = useState<SearchState>({ begin: defaultBegin, end: defaultEnd, site: 'all', events: [], results: [] })
   const [editing, setEditing] = useState<Entry | null>(null)
 
   const [site, setSite] = useState<Site>('clinic')
@@ -160,7 +165,7 @@ function App() {
     }
   }
 
-  const tz = user?.tz || 'UTC'
+  const tz = user?.tz || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
   // const toTZ = (iso: string) => new Date(iso)
 
   if (loading) return <div style={containerStyle}>Loading…</div>
@@ -204,14 +209,29 @@ function App() {
           defaultEvents={events}
           allEvents={allEvents}
           tz={tz}
-          onCancel={() => { setEditing(null); setView('time') }}
-          onCreated={async () => { await refreshEntries(); setEditing(null); setView('time') }}
+          onCancel={() => { const rv = returnView || 'time'; setEditing(null); setView(rv); setReturnView(null) }}
+          onCreated={async () => {
+            await refreshEntries()
+            // If we came from search, refresh that result row in-place
+            if (returnView === 'search' && editing?.id) {
+              try {
+                const { entry } = await api.getEntry(editing.id)
+                setSearchState((s) => ({ ...s, results: s.results.map(r => r.id === entry.id ? entry : r) }))
+              } catch {}
+            }
+            const rv = returnView || 'time'
+            setEditing(null)
+            setView(rv)
+            setReturnView(null)
+          }}
         />
       ) : view === 'search' ? (
         <LogSearchScreen
           allEvents={allEvents}
           tz={tz}
-          onOpenEntry={(entry)=>{ setEditing(entry); setView('edit') }}
+          initialState={searchState}
+          onStateChange={(st)=>setSearchState(st)}
+          onOpenEntry={(entry)=>{ setReturnView('search'); setEditing(entry); setView('edit') }}
         />
       ) : (
         <>
@@ -297,7 +317,7 @@ function App() {
                 : (start && stop ? Math.round((+stop - +start) / 60000) : null)
               return (
                 <div key={e.id} className="logsRow" style={{ padding: '8px 0', borderBottom: '1px solid rgba(238,238,238,0.5)' }}>
-                  <div className="cellDay" style={{ cursor: 'pointer', textDecoration: 'none', color: '#ffb616' }} onClick={()=>{ setEditing(e); setView('edit') }}>{formatDayMonTZ(dateForDisplay, tz)}</div>
+                  <div className="cellDay" style={{ cursor: 'pointer', textDecoration: 'none', color: '#ffb616' }} onClick={()=>{ setReturnView('time'); setEditing(e); setView('edit') }}>{formatDayMonTZ(dateForDisplay, tz)}</div>
                   <div className="cellNotes" title={e.notes || ''}>{e.notes || ''}</div>
                   <div className={`cellStart ${isActiveRow ? 'pulse' : ''}`}>{start ? renderCivil(start, tz) : '—'}</div>
                   <div className="cellStop">{stop ? renderCivil(stop, tz) : '—'}</div>
@@ -509,6 +529,8 @@ function SettingsScreen(props: { user: User, onSave: (tz:string)=>Promise<void> 
 function NewEntryScreen(props: { mode?: 'new'|'edit', entry?: Entry, defaultSite: Site, defaultEvents: string[], allEvents: string[], tz?: string, onCancel: ()=>void, onCreated: ()=>Promise<void> }) {
   const tz = props.tz || Intl.DateTimeFormat().resolvedOptions().timeZone
   const now = useClock()
+  // Ensure form starts at top of the viewport when opened from deep scroll (e.g., Log Search)
+  useEffect(() => { try { window.scrollTo({ top: 0, behavior: 'auto' }) } catch {} }, [])
   const toHHMMInTZ = (iso?: string | null): string => {
     if (!iso) return ''
     const d = new Date(iso)
@@ -541,15 +563,24 @@ function NewEntryScreen(props: { mode?: 'new'|'edit', entry?: Entry, defaultSite
   const [submitting, setSubmitting] = useState(false)
   const [noteRows, setNoteRows] = useState(2)
 
+  // Prefill duration when appropriate
   useEffect(() => {
-    if (props.entry && props.entry.duration_min != null) {
-      const d = props.entry.duration_min
+    const hasDuration = props.entry && props.entry.duration_min != null
+    const hasTimes = !!(props.entry?.start_iso || props.entry?.stop_iso)
+    // In edit mode, only prefill duration if the entry has no explicit start/stop times (duration-only entries)
+    // In new mode, prefill if duration is present
+    if (hasDuration && (props.mode !== 'edit' || !hasTimes)) {
+      const d = props.entry!.duration_min as number
       const hh = Math.floor(d / 60)
       const mm = d % 60
-      if (hh > 0) setDurH(String(hh))
-      if (mm > 0) setDurM(String(mm))
+      setDurH(hh > 0 ? String(hh) : '')
+      setDurM(mm > 0 ? String(mm) : '')
+    } else {
+      // Ensure duration fields are cleared when switching to time-based edit entries
+      setDurH('')
+      setDurM('')
     }
-  }, [props.entry])
+  }, [props.entry, props.mode])
 
   // When editing, fetch events for the entry so we can pre-check them
   useEffect(() => {
@@ -742,22 +773,27 @@ function NewEntryScreen(props: { mode?: 'new'|'edit', entry?: Entry, defaultSite
   )
 }
 
-function LogSearchScreen(props: { allEvents: string[], tz?: string, onOpenEntry: (e: Entry)=>void }) {
+type SearchState = { begin: string; end: string; site: 'all'|'clinic'|'remote'; events: string[]; results: Entry[] }
+function LogSearchScreen(props: { allEvents: string[], tz?: string, initialState?: SearchState, onStateChange?: (st: SearchState)=>void, onOpenEntry: (e: Entry)=>void }) {
   const tz = props.tz || Intl.DateTimeFormat().resolvedOptions().timeZone
-  const [begin, setBegin] = useState<string>(() => {
-    const d = new Date(); d.setDate(d.getDate() - 7)
-    const y = d.getFullYear(); const m = String(d.getMonth()+1).padStart(2,'0'); const day = String(d.getDate()).padStart(2,'0')
-    return `${y}-${m}-${day}`
-  })
-  const [end, setEnd] = useState<string>(() => {
-    const d = new Date()
-    const y = d.getFullYear(); const m = String(d.getMonth()+1).padStart(2,'0'); const day = String(d.getDate()).padStart(2,'0')
-    return `${y}-${m}-${day}`
-  })
-  const [site, setSite] = useState<'all'|'clinic'|'remote'>('all')
-  const [events, setEvents] = useState<string[]>([])
-  const [results, setResults] = useState<Entry[]>([])
+  const [begin, setBegin] = useState<string>(props.initialState?.begin || '')
+  const [end, setEnd] = useState<string>(props.initialState?.end || '')
+  const [site, setSite] = useState<'all'|'clinic'|'remote'>(props.initialState?.site || 'all')
+  const [events, setEvents] = useState<string[]>(props.initialState?.events || [])
+  const [results, setResults] = useState<Entry[]>(props.initialState?.results || [])
   const [loading, setLoading] = useState(false)
+
+  // Initialize default dates if not provided
+  useEffect(() => {
+    if (!begin || !end) {
+      const d1 = new Date(); d1.setDate(d1.getDate() - 7)
+      const d2 = new Date()
+      const y1 = d1.getFullYear(); const m1 = String(d1.getMonth()+1).padStart(2,'0'); const day1 = String(d1.getDate()).padStart(2,'0')
+      const y2 = d2.getFullYear(); const m2 = String(d2.getMonth()+1).padStart(2,'0'); const day2 = String(d2.getDate()).padStart(2,'0')
+      if (!begin) setBegin(`${y1}-${m1}-${day1}`)
+      if (!end) setEnd(`${y2}-${m2}-${day2}`)
+    }
+  }, [])
 
   function toggleEvent(name: string) {
     setEvents(prev => prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name])
@@ -798,10 +834,15 @@ function LogSearchScreen(props: { allEvents: string[], tz?: string, onOpenEntry:
       const { entries } = await api.list(1000)
       const filtered = entries.filter(e => withinRange(e) && matchesSite(e) && matchesEvents(e))
       setResults(filtered)
+      props.onStateChange?.({ begin, end, site, events, results: filtered })
     } finally {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    props.onStateChange?.({ begin, end, site, events, results })
+  }, [begin, end, site, events])
 
   return (
     <div style={{ marginTop: 12 }}>
@@ -845,7 +886,16 @@ function LogSearchScreen(props: { allEvents: string[], tz?: string, onOpenEntry:
         ) : (
           <div>
             {results.map((e) => {
-              const dateForDisplay = e.start_iso ? new Date(e.start_iso) : (e.start_local_date ? new Date(`${e.start_local_date}T12:00:00Z`) : new Date())
+              let dateForDisplay: Date
+              if (e.start_iso) {
+                dateForDisplay = new Date(e.start_iso)
+              } else if (e.start_local_date) {
+                const v = (e as any).start_local_date as string
+                // If server serialized DATE as ISO with time, use it directly; else append a midday time
+                dateForDisplay = new Date(v.includes('T') ? v : `${v}T12:00:00Z`)
+              } else {
+                dateForDisplay = new Date()
+              }
               const start = e.start_iso ? new Date(e.start_iso) : null
               const stop = e.stop_iso ? new Date(e.stop_iso) : null
               const dur = (typeof e.duration_min === 'number')
