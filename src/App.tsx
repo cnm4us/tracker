@@ -455,7 +455,7 @@ function NewEntryScreen(props: { mode?: 'new'|'edit', entry?: Entry, defaultSite
       setSubmitting(true)
       try {
         if (props.mode === 'edit' && props.entry) {
-          await api.updateEntryDuration(props.entry.id, site, undefined, startDate, h, m, notes || undefined)
+          await api.updateEntryDuration(props.entry.id, site, events, startDate, h, m, notes || undefined)
         } else {
           await api.manualDuration(site, events, startDate, h, m, notes)
         }
@@ -475,7 +475,7 @@ function NewEntryScreen(props: { mode?: 'new'|'edit', entry?: Entry, defaultSite
     setSubmitting(true)
     try {
       if (props.mode === 'edit' && props.entry) {
-        await api.updateEntryTimes(props.entry.id, site, undefined, s, e, notes || undefined)
+        await api.updateEntryTimes(props.entry.id, site, events, s, e, notes || undefined)
       } else {
         await api.manual(site, events, s, e, notes)
       }
@@ -519,7 +519,8 @@ function NewEntryScreen(props: { mode?: 'new'|'edit', entry?: Entry, defaultSite
             type="date"
             value={startDate}
             onChange={e=>{ setStartDate(e.target.value); if(!stopDate) setStopDate(e.target.value) }}
-            style={{ width:'80%', maxWidth:'100%', padding: '8px', borderRadius: 8, border: '1px solid #ccc', boxSizing: 'border-box', fontSize: 18, minHeight: 44 }}
+            className="pickField"
+            style={{ width:'80%', maxWidth:'100%', borderRadius: 8, border: '1px solid #ccc', boxSizing: 'border-box', fontSize: 18 }}
           />
         </div>
         <div style={{ minWidth: 0 }}>
@@ -528,17 +529,18 @@ function NewEntryScreen(props: { mode?: 'new'|'edit', entry?: Entry, defaultSite
             type="time"
             value={startTime}
             onChange={e=>setStartTime(e.target.value)}
-            style={{ width:'80%', maxWidth:'100%', padding: '8px', borderRadius: 8, border: '1px solid #ccc', boxSizing: 'border-box', fontSize: 18, minHeight: 44, display: 'block', marginLeft: 'auto' }}
+            className="timeField"
+            style={{ width:'80%', maxWidth:'100%', padding: '0 8px', lineHeight: '44px', borderRadius: 8, border: '1px solid #ccc', boxSizing: 'border-box', fontSize: 18, height: 44, display: 'block', marginLeft: 'auto', WebkitAppearance: 'none' as any }}
           />
         </div>
         <div style={{ minWidth: 0 }}>
           <label style={{ display: 'block', marginBottom: 6, fontWeight: 600, fontSize: 16 }}>Total Time</label>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <select value={durH} onChange={(e)=>setDurH(e.target.value)} style={{ width: '44%', flex: '0 0 44%', padding: '8px', borderRadius: 8, border: '1px solid #ccc', fontSize: 18, minHeight: 44 }}>
+            <select value={durH} onChange={(e)=>setDurH(e.target.value)} className="pickField" style={{ width: '44%', flex: '0 0 44%', borderRadius: 8, border: '1px solid #ccc', fontSize: 18 }}>
               <option value="" disabled hidden>hh</option>
               {[...Array(8)].map((_,i)=>(<option key={i+1} value={String(i+1)}>{i+1}</option>))}
             </select>
-            <select value={durM} onChange={(e)=>setDurM(e.target.value)} style={{ width: '44%', flex: '0 0 44%', padding: '8px', borderRadius: 8, border: '1px solid #ccc', fontSize: 18, minHeight: 44 }}>
+            <select value={durM} onChange={(e)=>setDurM(e.target.value)} className="pickField" style={{ width: '44%', flex: '0 0 44%', borderRadius: 8, border: '1px solid #ccc', fontSize: 18 }}>
               <option value="" disabled hidden>mm</option>
               {[15,30,45].map((v)=>(<option key={v} value={String(v)}>{v}</option>))}
             </select>
@@ -551,7 +553,8 @@ function NewEntryScreen(props: { mode?: 'new'|'edit', entry?: Entry, defaultSite
             value={stopTime}
             onChange={e=>setStopTime(e.target.value)}
             readOnly={!!(durH || durM)}
-            style={{ width:'80%', maxWidth:'100%', padding: '8px', borderRadius: 8, border: '1px solid #fff', boxSizing: 'border-box', fontSize: 18, minHeight: 44, background: 'transparent', display: 'block', marginLeft: 'auto' }}
+            className="timeField"
+            style={{ width:'80%', maxWidth:'100%', padding: '0 8px', lineHeight: '44px', borderRadius: 8, border: '1px solid #fff', boxSizing: 'border-box', fontSize: 18, height: 44, background: 'transparent', display: 'block', marginLeft: 'auto', WebkitAppearance: 'none' as any }}
           />
         </div>
       </div>

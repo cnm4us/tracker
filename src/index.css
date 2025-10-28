@@ -30,6 +30,44 @@ body {
   overflow-x: hidden; /* prevent horizontal scroll */
 }
 
+/* Normalize time input appearance/height across browsers (esp. iOS Safari) */
+.timeField {
+  height: 44px;
+  line-height: 44px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.timeField::-webkit-datetime-edit,
+.timeField::-webkit-datetime-edit-fields-wrapper,
+.timeField::-webkit-datetime-edit-hour-field,
+.timeField::-webkit-datetime-edit-minute-field,
+.timeField::-webkit-datetime-edit-ampm-field,
+.timeField::-webkit-datetime-edit-text {
+  padding: 0;
+}
+.timeField::-webkit-calendar-picker-indicator {
+  margin: 0;
+  padding: 0;
+}
+
+/* Make date inputs and selects match the taller iOS time controls */
+.pickField {
+  height: 45px; /* reduced by ~2px */
+  line-height: 45px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.pickField::-webkit-calendar-picker-indicator,
+.pickField::-webkit-datetime-edit,
+.pickField::-webkit-datetime-edit-fields-wrapper {
+  margin: 0;
+  padding: 0;
+}
+
 h1 {
   font-size: 3.2em;
   line-height: 1.1;
