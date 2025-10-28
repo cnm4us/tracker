@@ -14,6 +14,14 @@ const containerStyle: React.CSSProperties = {
   boxSizing: 'border-box',
 }
 
+const authBgStyle: React.CSSProperties = {
+  minHeight: '100vh',
+  backgroundImage: "url('/bg/login-1080x1920.jpg')",
+  backgroundSize: 'cover',
+  backgroundPosition: 'center',
+  backgroundRepeat: 'no-repeat',
+}
+
 const rowStyle: React.CSSProperties = { display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }
 const btnStyle: React.CSSProperties = {
   padding: '12px 16px',
@@ -36,7 +44,7 @@ function App() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [view, setView] = useState<'time' | 'settings' | 'login' | 'new' | 'edit'>('login')
+  const [view, setView] = useState<'time' | 'settings' | 'login' | 'register' | 'new' | 'edit'>('login')
   const [editing, setEditing] = useState<Entry | null>(null)
 
   const [site, setSite] = useState<Site>('clinic')
@@ -151,8 +159,10 @@ function App() {
 
   if (loading) return <div style={containerStyle}>Loading…</div>
 
+  const isAuthView = !user && (view === 'login' || view === 'register')
   return (
-    <div style={containerStyle}>
+    <div style={isAuthView ? authBgStyle : undefined}>
+      <div style={containerStyle}>
       <Header
         user={user}
         view={view}
@@ -161,7 +171,11 @@ function App() {
       />
 
       {!user ? (
-        <AuthScreen error={error} onLogin={onLogin} onRegister={onRegister} />
+        view === 'register' ? (
+          <RegisterScreen error={error} onRegister={onRegister} />
+        ) : (
+          <AuthScreen error={error} onLogin={onLogin} />
+        )
       ) : view === 'settings' ? (
         <SettingsScreen
           user={user}
@@ -221,7 +235,7 @@ function App() {
               onFocus={()=>setNotesRows(4)}
               onBlur={()=>setNotesRows(2)}
               className="avoidZoom"
-              style={{ width: '100%', padding: 8, borderRadius: 8, border: '1px solid #ccc', resize: 'vertical', boxSizing: 'border-box' }}
+              style={{ width: '100%', padding: 8, borderRadius: 8, border: '1px solid rgba(255,255,255,0.35)', resize: 'vertical', boxSizing: 'border-box' }}
               placeholder="Optional notes"
             />
           </div>
@@ -282,13 +296,20 @@ function App() {
         </>
       )}
       {user && error && <div style={{ color: 'crimson', marginTop: 12 }}>{error}</div>}
+      </div>
     </div>
   )
 }
 
-function Header(props: { user: User | null, view: 'time'|'settings'|'login'|'new', onNavigate: (v:'time'|'settings'|'login'|'new')=>void, onLogout: ()=>void }) {
+function Header(props: { user: User | null, view: 'time'|'settings'|'login'|'register'|'new'|'edit', onNavigate: (v:'time'|'settings'|'login'|'register'|'new'|'edit')=>void, onLogout: ()=>void }) {
   const [open, setOpen] = useState(false)
-  const title = props.view === 'settings' ? 'Settings' : props.view === 'new' ? 'New Entry' : props.view === 'time' ? 'Time Entry' : 'Login'
+  const title =
+    props.view === 'settings' ? 'Settings'
+    : props.view === 'new' ? 'New Entry'
+    : props.view === 'edit' ? 'Edit Entry'
+    : props.view === 'time' ? 'Time Entry'
+    : props.view === 'register' ? 'Register'
+    : 'Login'
   return (
     <div style={{ position: 'sticky', top: 0, zIndex: 5, background: 'transparent', paddingBottom: 8 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', position: 'relative' }}>
@@ -322,7 +343,10 @@ function Header(props: { user: User | null, view: 'time'|'settings'|'login'|'new
               <button aria-label="Close menu" onClick={()=>setOpen(false)} style={{ background: 'transparent', color: '#fff', border: 'none', fontSize: 20, lineHeight: 1 }}>✕</button>
             </div>
             {!props.user ? (
-              <button onClick={()=>{ props.onNavigate('login'); setOpen(false) }} style={{ ...btnStyle, background: '#1976d2', color: '#fff', width: '100%' }}>Login</button>
+              <>
+                <button onClick={()=>{ props.onNavigate('login'); setOpen(false) }} style={{ ...btnStyle, background: '#1976d2', color: '#fff', width: '100%' }}>Login</button>
+                <button onClick={()=>{ props.onNavigate('register'); setOpen(false) }} style={{ ...btnStyle, background: '#455a64', color: '#fff', width: '100%' }}>Register</button>
+              </>
             ) : (
               <>
                 <button onClick={()=>{ props.onNavigate('time'); setOpen(false) }} style={{ ...btnStyle, background: 'rgba(255,255,255,0.12)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', width: '100%', textAlign: 'left' }}>Time Entry</button>
@@ -339,17 +363,32 @@ function Header(props: { user: User | null, view: 'time'|'settings'|'login'|'new
   )
 }
 
-function AuthScreen(props: { error: string | null, onLogin: (e:string,p:string)=>void, onRegister:(e:string,p:string)=>void }) {
+function AuthScreen(props: { error: string | null, onLogin: (e:string,p:string)=>void }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   return (
     <div style={{ marginTop: 16 }}>
-      <div style={{ fontWeight: 600, marginBottom: 8 }}>Login / Register</div>
-      <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="Email" type="email" style={{ width: '100%', padding: 8, border: '1px solid #ccc', borderRadius: 6, marginBottom: 8 }} />
-      <input value={password} onChange={e=>setPassword(e.target.value)} placeholder="Password" type="password" style={{ width: '100%', padding: 8, border: '1px solid #ccc', borderRadius: 6, marginBottom: 8 }} />
+      <div style={{ fontWeight: 600, marginBottom: 8 }}>Login</div>
+      <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="Email" type="email" style={{ width: '100%', boxSizing: 'border-box', padding: 8, border: '1px solid rgba(255,255,255,0.35)', borderRadius: 6, marginBottom: 8, background: 'rgba(0,0,0,0.5)', color: '#fff' }} />
+      <input value={password} onChange={e=>setPassword(e.target.value)} placeholder="Password" type="password" style={{ width: '100%', boxSizing: 'border-box', padding: 8, border: '1px solid rgba(255,255,255,0.35)', borderRadius: 6, marginBottom: 8, background: 'rgba(0,0,0,0.5)', color: '#fff' }} />
       <div style={{ display: 'flex', gap: 8 }}>
         <button onClick={()=>props.onLogin(email,password)} style={{ ...btnStyle, background: '#1976d2', color: 'white', flex: 1 }}>Login</button>
-        <button onClick={()=>props.onRegister(email,password)} style={{ ...btnStyle, background: '#455a64', color: 'white', flex: 1 }}>Register</button>
+      </div>
+      {props.error && <div style={{ color: 'crimson', marginTop: 12 }}>{props.error}</div>}
+    </div>
+  )
+}
+
+function RegisterScreen(props: { error: string | null, onRegister: (e:string,p:string)=>void }) {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{ fontWeight: 600, marginBottom: 8 }}>Register</div>
+      <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="Email" type="email" style={{ width: '100%', boxSizing: 'border-box', padding: 8, border: '1px solid rgba(255,255,255,0.35)', borderRadius: 6, marginBottom: 8, background: 'rgba(0,0,0,0.5)', color: '#fff' }} />
+      <input value={password} onChange={e=>setPassword(e.target.value)} placeholder="Password" type="password" style={{ width: '100%', boxSizing: 'border-box', padding: 8, border: '1px solid rgba(255,255,255,0.35)', borderRadius: 6, marginBottom: 8, background: 'rgba(0,0,0,0.5)', color: '#fff' }} />
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button onClick={()=>props.onRegister(email,password)} style={{ ...btnStyle, background: '#455a64', color: 'white', flex: 1 }}>Create Account</button>
       </div>
       {props.error && <div style={{ color: 'crimson', marginTop: 12 }}>{props.error}</div>}
     </div>
@@ -553,7 +592,7 @@ function NewEntryScreen(props: { mode?: 'new'|'edit', entry?: Entry, defaultSite
           rows={noteRows}
           onFocus={()=>setNoteRows(4)}
           onBlur={()=>setNoteRows(2)}
-          style={{ width: '100%', padding: 8, borderRadius: 8, border: '1px solid #ccc', resize: 'vertical', boxSizing: 'border-box' }}
+          style={{ width: '100%', padding: 8, borderRadius: 8, border: '1px solid rgba(255,255,255,0.35)', resize: 'vertical', boxSizing: 'border-box' }}
           placeholder="Optional notes"
         />
       </div>
@@ -566,7 +605,7 @@ function NewEntryScreen(props: { mode?: 'new'|'edit', entry?: Entry, defaultSite
             value={startDate}
             onChange={e=>{ setStartDate(e.target.value); if(!stopDate) setStopDate(e.target.value) }}
             className="pickField"
-            style={{ width:'80%', maxWidth:'100%', borderRadius: 8, border: '1px solid #ccc', boxSizing: 'border-box', fontSize: 18 }}
+            style={{ width:'80%', maxWidth:'100%', borderRadius: 8, border: '1px solid rgba(255,255,255,0.35)', boxSizing: 'border-box', fontSize: 18, color: '#ffb616' }}
           />
         </div>
         <div style={{ minWidth: 0 }}>
@@ -576,17 +615,17 @@ function NewEntryScreen(props: { mode?: 'new'|'edit', entry?: Entry, defaultSite
             value={startTime}
             onChange={e=>setStartTime(e.target.value)}
             className="timeField"
-            style={{ width:'80%', maxWidth:'100%', padding: '0 8px', lineHeight: '44px', borderRadius: 8, border: '1px solid #ccc', boxSizing: 'border-box', fontSize: 18, height: 44, display: 'block', marginLeft: 'auto', WebkitAppearance: 'none' as any }}
+            style={{ width:'80%', maxWidth:'100%', padding: '0 8px', lineHeight: '44px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.35)', boxSizing: 'border-box', fontSize: 18, height: 44, display: 'block', marginLeft: 'auto', WebkitAppearance: 'none' as any, color: '#ffb616' }}
           />
         </div>
         <div style={{ minWidth: 0 }}>
           <label style={{ display: 'block', marginBottom: 6, fontWeight: 600, fontSize: 16 }}>Total Time</label>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <select value={durH} onChange={(e)=>setDurH(e.target.value)} className="pickField" style={{ width: '44%', flex: '0 0 44%', borderRadius: 8, border: '1px solid #ccc', fontSize: 18 }}>
+            <select value={durH} onChange={(e)=>setDurH(e.target.value)} className="pickField" style={{ width: '44%', flex: '0 0 44%', borderRadius: 8, border: '1px solid rgba(255,255,255,0.35)', fontSize: 18, color: '#ffb616' }}>
               <option value="" disabled hidden>hh</option>
               {[...Array(8)].map((_,i)=>(<option key={i+1} value={String(i+1)}>{i+1}</option>))}
             </select>
-            <select value={durM} onChange={(e)=>setDurM(e.target.value)} className="pickField" style={{ width: '44%', flex: '0 0 44%', borderRadius: 8, border: '1px solid #ccc', fontSize: 18 }}>
+            <select value={durM} onChange={(e)=>setDurM(e.target.value)} className="pickField" style={{ width: '44%', flex: '0 0 44%', borderRadius: 8, border: '1px solid rgba(255,255,255,0.35)', fontSize: 18, color: '#ffb616' }}>
               <option value="" disabled hidden>mm</option>
               {[15,30,45].map((v)=>(<option key={v} value={String(v)}>{v}</option>))}
             </select>
@@ -600,13 +639,19 @@ function NewEntryScreen(props: { mode?: 'new'|'edit', entry?: Entry, defaultSite
             onChange={e=>setStopTime(e.target.value)}
             readOnly={!!(durH || durM)}
             className="timeField"
-            style={{ width:'80%', maxWidth:'100%', padding: '0 8px', lineHeight: '44px', borderRadius: 8, border: '1px solid #fff', boxSizing: 'border-box', fontSize: 18, height: 44, background: 'transparent', display: 'block', marginLeft: 'auto', WebkitAppearance: 'none' as any }}
+            style={{ width:'80%', maxWidth:'100%', padding: '0 8px', lineHeight: '44px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.35)', boxSizing: 'border-box', fontSize: 18, height: 44, background: 'transparent', display: 'block', marginLeft: 'auto', WebkitAppearance: 'none' as any, color: '#ffb616' }}
           />
         </div>
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 16 }}>
-        <button disabled={submitting} onClick={props.onCancel} style={{ ...btnStyle, background: '#eee' }}>Cancel</button>
+        <button
+          disabled={submitting}
+          onClick={props.onCancel}
+          style={{ ...btnStyle, background: props.mode === 'edit' ? '#d32f2f' : '#eee', color: props.mode === 'edit' ? '#fff' : undefined }}
+        >
+          Cancel
+        </button>
         <button disabled={submitting} onClick={submitManual} style={{ ...btnStyle, background: '#2e7d32', color: 'white' }}>Submit</button>
       </div>
     </div>
