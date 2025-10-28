@@ -50,7 +50,7 @@ function App() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [view, setView] = useState<'time' | 'settings' | 'login' | 'register' | 'new' | 'edit'>('login')
+  const [view, setView] = useState<'time' | 'settings' | 'login' | 'register' | 'new' | 'edit' | 'search'>('login')
   const [editing, setEditing] = useState<Entry | null>(null)
 
   const [site, setSite] = useState<Site>('clinic')
@@ -207,6 +207,12 @@ function App() {
           onCancel={() => { setEditing(null); setView('time') }}
           onCreated={async () => { await refreshEntries(); setEditing(null); setView('time') }}
         />
+      ) : view === 'search' ? (
+        <LogSearchScreen
+          allEvents={allEvents}
+          tz={tz}
+          onOpenEntry={(entry)=>{ setEditing(entry); setView('edit') }}
+        />
       ) : (
         <>
           <div style={{ marginTop: 8, marginBottom: 12, display: 'flex', gap: 12, alignItems: 'baseline', justifyContent: 'space-between' }}>
@@ -308,13 +314,14 @@ function App() {
   )
 }
 
-function Header(props: { user: User | null, view: 'time'|'settings'|'login'|'register'|'new'|'edit', onNavigate: (v:'time'|'settings'|'login'|'register'|'new'|'edit')=>void, onLogout: ()=>void }) {
+function Header(props: { user: User | null, view: 'time'|'settings'|'login'|'register'|'new'|'edit'|'search', onNavigate: (v:'time'|'settings'|'login'|'register'|'new'|'edit'|'search')=>void, onLogout: ()=>void }) {
   const [open, setOpen] = useState(false)
   const title =
     props.view === 'settings' ? 'Settings'
     : props.view === 'new' ? 'Manual Entry'
     : props.view === 'edit' ? 'Edit Entry'
     : props.view === 'time' ? 'Timed Entry'
+    : props.view === 'search' ? 'Log Search'
     : props.view === 'register' ? 'Register'
     : 'Login'
   return (
@@ -381,6 +388,13 @@ function Header(props: { user: User | null, view: 'time'|'settings'|'login'|'reg
                   style={{ ...btnStyle, color: '#fff', width: '100%', textAlign: 'left', ['--btn-color' as any]: '#ffb616' }}
                 >
                   Manual Entry
+                </button>
+                <button
+                  onClick={()=>{ props.onNavigate('search'); setOpen(false) }}
+                  className="btn-glass"
+                  style={{ ...btnStyle, color: '#fff', width: '100%', textAlign: 'left', ['--btn-color' as any]: '#ffb616' }}
+                >
+                  Log Search
                 </button>
                 <button
                   onClick={()=>{ props.onNavigate('settings'); setOpen(false) }}
@@ -723,6 +737,132 @@ function NewEntryScreen(props: { mode?: 'new'|'edit', entry?: Entry, defaultSite
         >
           Submit
         </button>
+      </div>
+    </div>
+  )
+}
+
+function LogSearchScreen(props: { allEvents: string[], tz?: string, onOpenEntry: (e: Entry)=>void }) {
+  const tz = props.tz || Intl.DateTimeFormat().resolvedOptions().timeZone
+  const [begin, setBegin] = useState<string>(() => {
+    const d = new Date(); d.setDate(d.getDate() - 7)
+    const y = d.getFullYear(); const m = String(d.getMonth()+1).padStart(2,'0'); const day = String(d.getDate()).padStart(2,'0')
+    return `${y}-${m}-${day}`
+  })
+  const [end, setEnd] = useState<string>(() => {
+    const d = new Date()
+    const y = d.getFullYear(); const m = String(d.getMonth()+1).padStart(2,'0'); const day = String(d.getDate()).padStart(2,'0')
+    return `${y}-${m}-${day}`
+  })
+  const [site, setSite] = useState<'all'|'clinic'|'remote'>('all')
+  const [events, setEvents] = useState<string[]>([])
+  const [results, setResults] = useState<Entry[]>([])
+  const [loading, setLoading] = useState(false)
+
+  function toggleEvent(name: string) {
+    setEvents(prev => prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name])
+  }
+
+  function toYMDInTZ(iso?: string | null): string | null {
+    if (!iso) return null
+    const d = new Date(iso)
+    if (isNaN(d.getTime())) return null
+    const y = new Intl.DateTimeFormat('en-US', { year: 'numeric', timeZone: tz }).format(d)
+    const m = new Intl.DateTimeFormat('en-US', { month: '2-digit', timeZone: tz }).format(d)
+    const day = new Intl.DateTimeFormat('en-US', { day: '2-digit', timeZone: tz }).format(d)
+    return `${y}-${m}-${day}`
+  }
+
+  function withinRange(e: Entry): boolean {
+    const ymd = e.start_local_date || toYMDInTZ(e.start_iso) || ''
+    if (!ymd) return false
+    if (begin && ymd < begin) return false
+    if (end && ymd > end) return false
+    return true
+  }
+
+  function matchesSite(e: Entry): boolean {
+    if (site === 'all') return true
+    return (e.site as any) === site
+  }
+
+  function matchesEvents(e: Entry): boolean {
+    if (!events.length) return true
+    if (!e.events || !Array.isArray(e.events)) return true // no event data available; don't exclude
+    return e.events.some(ev => events.includes(ev))
+  }
+
+  async function onSearch() {
+    setLoading(true)
+    try {
+      const { entries } = await api.list(1000)
+      const filtered = entries.filter(e => withinRange(e) && matchesSite(e) && matchesEvents(e))
+      setResults(filtered)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div>
+          <label style={{ display: 'block', marginBottom: 6, fontWeight: 600 }}>Beginning Date</label>
+          <input type="date" value={begin} onChange={e=>setBegin(e.target.value)} className="pickField" style={{ width: '100%', borderRadius: 8, border: '1px solid rgba(255,255,255,0.35)' }} />
+        </div>
+        <div>
+          <label style={{ display: 'block', marginBottom: 6, fontWeight: 600 }}>Ending Date</label>
+          <input type="date" value={end} onChange={e=>setEnd(e.target.value)} className="pickField" style={{ width: '100%', borderRadius: 8, border: '1px solid rgba(255,255,255,0.35)' }} />
+        </div>
+      </div>
+
+      <div style={{ marginTop: 12 }}>
+        <span style={{ fontWeight: 600, marginRight: 12 }}>Site:</span>
+        <label style={{ marginRight: 12 }}><input type="radio" name="s" checked={site==='all'} onChange={()=>setSite('all')} /> All</label>
+        <label style={{ marginRight: 12 }}><input type="radio" name="s" checked={site==='clinic'} onChange={()=>setSite('clinic')} /> Clinic</label>
+        <label><input type="radio" name="s" checked={site==='remote'} onChange={()=>setSite('remote')} /> Remote</label>
+      </div>
+
+      <div style={{ margin: '12px 0' }}>
+        <label style={{ display: 'block', marginBottom: 8, fontWeight: 600 }}>Events:</label>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+          {props.allEvents.map((name) => (
+            <label key={name} style={{ display: 'flex', alignItems: 'center', gap: 6, overflowWrap: 'anywhere' }}>
+              <input type="checkbox" checked={events.includes(name)} onChange={() => toggleEvent(name)} /> {name}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <button onClick={onSearch} className="btn3d btn-glass" style={{ ...btnStyle, color: '#fff', width: '100%', ['--btn-color' as any]: '#1976d2' }}>Search</button>
+
+      <div style={{ marginTop: 16 }}>
+        <h3 style={{ margin: '16px 0 8px' }}>Results</h3>
+        {loading ? (
+          <div>Searching…</div>
+        ) : results.length === 0 ? (
+          <div>No results</div>
+        ) : (
+          <div>
+            {results.map((e) => {
+              const dateForDisplay = e.start_iso ? new Date(e.start_iso) : (e.start_local_date ? new Date(`${e.start_local_date}T12:00:00Z`) : new Date())
+              const start = e.start_iso ? new Date(e.start_iso) : null
+              const stop = e.stop_iso ? new Date(e.stop_iso) : null
+              const dur = (typeof e.duration_min === 'number')
+                ? e.duration_min
+                : (start && stop ? Math.round((+stop - +start) / 60000) : null)
+              return (
+                <div key={e.id} className="logsRow" style={{ padding: '8px 0', borderBottom: '1px solid rgba(238,238,238,0.5)' }}>
+                  <div className="cellDay" style={{ color: '#ffb616', cursor: 'pointer' }} onClick={()=>props.onOpenEntry(e)}>{formatDayMonTZ(dateForDisplay, tz)}</div>
+                  <div className="cellNotes" title={e.notes || ''}>{e.notes || ''}</div>
+                  <div className="cellStart">{start ? renderCivil(start, tz) : '—'}</div>
+                  <div className="cellStop">{stop ? renderCivil(stop, tz) : '—'}</div>
+                  <div className="cellTotal" style={{ fontVariantNumeric: 'tabular-nums' as any }}>{formatDuration(dur ?? null)}</div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
     </div>
   )
