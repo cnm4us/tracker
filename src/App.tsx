@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import './App.css'
-import { api, Entry, formatCivilTZ, formatDayMonTZ, formatDuration, User, ymdInTZ } from './api'
+import { api, formatCivilTZ, formatDayMonTZ, formatDuration, ymdInTZ } from './api'
+import type { Entry, User } from './api'
 import sound from './sound'
 
 type Site = 'clinic' | 'remote'
@@ -127,7 +128,7 @@ function App() {
   async function clickStart() {
     if (activeEntry) {
       if (!confirm('You already have an active session. Stop it now?')) return
-      const stopped = await api.stop()
+      await api.stop()
       await refreshEntries()
     }
     try {
@@ -155,7 +156,7 @@ function App() {
   }
 
   const tz = user?.tz || 'UTC'
-  const toTZ = (iso: string) => new Date(iso)
+  // const toTZ = (iso: string) => new Date(iso)
 
   if (loading) return <div style={containerStyle}>Loading…</div>
 
@@ -243,22 +244,22 @@ function App() {
           <div style={{ ...rowStyle, justifyContent: 'space-between', marginTop: 8, marginBottom: 16 }}>
             <button
               onClick={clickStart}
-              className={`btn3d ${activeEntry ? 'btn3d-pressed' : ''}`}
-              style={{ ...btnStyle, background: activeEntry ? '#1976d2' : '#2e7d32', color: 'white' }}
+              className={`btn3d btn-glass ${activeEntry ? 'btn3d-pressed' : ''}`}
+              style={{ ...btnStyle, color: 'white', ['--btn-color' as any]: (activeEntry ? '#1976d2' : '#2e7d32') }}
             >
               Start
             </button>
             <button
               onClick={clickStop}
-              className={`btn3d ${stopping ? 'btn3d-pressed' : ''}`}
-              style={{ ...btnStyle, background: '#d32f2f', color: 'white' }}
+              className={`btn3d btn-glass ${stopping ? 'btn3d-pressed' : ''}`}
+              style={{ ...btnStyle, color: 'white', ['--btn-color' as any]: '#d32f2f' }}
             >
               Stop
             </button>
             <button
               onClick={async ()=>{ await sound.enable(); sound.playNew(); setView('new') }}
-              className="btn3d"
-              style={{ ...btnStyle, background: '#546e7a', color: 'white' }}
+              className="btn3d btn-glass"
+              style={{ ...btnStyle, color: 'white', ['--btn-color' as any]: '#546e7a' }}
             >
               New
             </button>
@@ -648,11 +649,19 @@ function NewEntryScreen(props: { mode?: 'new'|'edit', entry?: Entry, defaultSite
         <button
           disabled={submitting}
           onClick={props.onCancel}
-          style={{ ...btnStyle, background: props.mode === 'edit' ? '#d32f2f' : '#eee', color: props.mode === 'edit' ? '#fff' : undefined }}
+          className="btn3d btn-glass"
+          style={{ ...btnStyle, color: '#fff', ['--btn-color' as any]: '#d32f2f' }}
         >
           Cancel
         </button>
-        <button disabled={submitting} onClick={submitManual} style={{ ...btnStyle, background: '#2e7d32', color: 'white' }}>Submit</button>
+        <button
+          disabled={submitting}
+          onClick={submitManual}
+          className="btn3d btn-glass"
+          style={{ ...btnStyle, color: '#fff', ['--btn-color' as any]: '#2e7d32' }}
+        >
+          Submit
+        </button>
       </div>
     </div>
   )

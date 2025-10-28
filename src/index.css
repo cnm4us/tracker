@@ -49,6 +49,34 @@ html { -webkit-text-size-adjust: 100%; }
   transform: translateY(3px);
 }
 
+/* Glass button look (pairs well with .btn3d) */
+.btn-glass {
+  position: relative;
+  background-color: color-mix(in srgb, var(--btn-color, #666) 22%, transparent);
+  border: 1px solid rgba(255,255,255,0.28);
+  color: #fff;
+  backdrop-filter: blur(8px) saturate(140%);
+  -webkit-backdrop-filter: blur(8px) saturate(140%);
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+.btn-glass::before {
+  content: '';
+  position: absolute;
+  /* Only cover the top ~55% to avoid washing out the center */
+  inset: 0 0 45% 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(180deg,
+    rgba(255,255,255,0.30) 0%,
+    rgba(255,255,255,0.10) 35%,
+    rgba(255,255,255,0.00) 100%
+  );
+}
+.btn-glass:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--btn-color, #999) 60%, #ffffff 40%);
+  outline-offset: 2px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .btn3d { transition: none; }
 }
