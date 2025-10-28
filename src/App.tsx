@@ -824,17 +824,39 @@ function LogSearchScreen(props: { allEvents: string[], tz?: string, initialState
 
   function matchesEvents(e: Entry): boolean {
     if (!events.length) return true
-    if (!e.events || !Array.isArray(e.events)) return true // no event data available; don't exclude
-    return e.events.some(ev => events.includes(ev))
+    if (!e.events || !Array.isArray(e.events)) return false // strict: require event data when filtering
+    const selected = new Set(events.map(v => v.trim().toLowerCase()))
+    return e.events.some(ev => selected.has(String(ev).trim().toLowerCase()))
   }
 
   async function onSearch() {
     setLoading(true)
     try {
       const { entries } = await api.list(1000)
-      const filtered = entries.filter(e => withinRange(e) && matchesSite(e) && matchesEvents(e))
-      setResults(filtered)
-      props.onStateChange?.({ begin, end, site, events, results: filtered })
+      // First pass: filter by date and site only
+      const base = entries.filter(e => withinRange(e) && matchesSite(e))
+      // If no event filters, we are done
+      if (!events.length) {
+        setResults(base)
+        props.onStateChange?.({ begin, end, site, events, results: base })
+        return
+      }
+      // Hydrate events for accurate event filtering
+      const ids = base.map(e => e.id)
+      const concurrency = 8
+      const detailed: Entry[] = []
+      let i = 0
+      while (i < ids.length) {
+        const slice = ids.slice(i, i + concurrency)
+        const chunk = await Promise.all(slice.map(async (id) => {
+          try { const { entry } = await api.getEntry(id); return entry as Entry } catch { return null }
+        }))
+        for (const ent of chunk) if (ent) detailed.push(ent)
+        i += concurrency
+      }
+      const byEvents = detailed.filter(matchesEvents)
+      setResults(byEvents)
+      props.onStateChange?.({ begin, end, site, events, results: byEvents })
     } finally {
       setLoading(false)
     }
@@ -849,11 +871,11 @@ function LogSearchScreen(props: { allEvents: string[], tz?: string, initialState
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <div>
           <label style={{ display: 'block', marginBottom: 6, fontWeight: 600 }}>Beginning Date</label>
-          <input type="date" value={begin} onChange={e=>setBegin(e.target.value)} className="pickField" style={{ width: '100%', borderRadius: 8, border: '1px solid rgba(255,255,255,0.35)' }} />
+          <input type="date" value={begin} onChange={e=>setBegin(e.target.value)} className="pickField" style={{ width: '100%', borderRadius: 8, border: '1px solid rgba(255,255,255,0.35)', color: '#ffb616' }} />
         </div>
         <div>
           <label style={{ display: 'block', marginBottom: 6, fontWeight: 600 }}>Ending Date</label>
-          <input type="date" value={end} onChange={e=>setEnd(e.target.value)} className="pickField" style={{ width: '100%', borderRadius: 8, border: '1px solid rgba(255,255,255,0.35)' }} />
+          <input type="date" value={end} onChange={e=>setEnd(e.target.value)} className="pickField" style={{ width: '100%', borderRadius: 8, border: '1px solid rgba(255,255,255,0.35)', color: '#ffb616' }} />
         </div>
       </div>
 

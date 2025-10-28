@@ -26,7 +26,8 @@ entriesRouter.post('/start', requireAuth, async (req: AuthedRequest, res: Respon
       const [active] = await conn.query('SELECT id FROM entries WHERE user_id = ? AND start_utc IS NOT NULL AND stop_utc IS NULL LIMIT 1', [userId])
       if ((active as any[]).length) return res.status(409).json({ error: 'An entry is already active' })
 
-      const startLocalDate = ymdInTZ(now, req.user!.tz || 'UTC')
+      const userTz = (req.user?.tz || String(req.headers['x-user-tz']) || 'UTC') as string
+      const startLocalDate = ymdInTZ(now, userTz)
       const [r] = await conn.query(
         'INSERT INTO entries (user_id, site, start_local_date, start_utc, notes) VALUES (?, ?, ?, ?, ?)',
         [userId, site, startLocalDate, now, notes || null]
@@ -113,7 +114,8 @@ entriesRouter.post('/', requireAuth, async (req: AuthedRequest, res: Response) =
   const userId = req.user!.id
   try {
     await withConn(async (conn) => {
-      const localDate = start_local_date || (start ? String(start.toISOString().slice(0, 10)) : null)
+      const userTz = (req.user?.tz || String(req.headers['x-user-tz']) || 'UTC') as string
+      const localDate = start_local_date || (start ? ymdInTZ(start, userTz) : null)
       if (!localDate) return res.status(400).json({ error: 'start_local_date required' })
       const [r] = await conn.query(
         'INSERT INTO entries (user_id, site, start_local_date, start_utc, stop_utc, duration_min, notes) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -170,7 +172,8 @@ entriesRouter.patch('/:id', requireAuth, async (req: AuthedRequest, res: Respons
       else if (start && stop) dur = Math.max(0, Math.floor((+stop - +start) / 60000))
 
       const newSite = site && ['clinic', 'remote'].includes(site) ? site : existing.site
-      const newLocalDate = start_local_date || (start ? String(start.toISOString().slice(0, 10)) : existing.start_local_date)
+      const userTz2 = (req.user?.tz || String(req.headers['x-user-tz']) || 'UTC') as string
+      const newLocalDate = start_local_date || (start ? ymdInTZ(start, userTz2) : existing.start_local_date)
       await conn.query('UPDATE entries SET site = ?, start_local_date = ?, start_utc = ?, stop_utc = ?, duration_min = ?, notes = ? WHERE id = ?', [newSite, newLocalDate, start, stop, dur, notes ?? existing.notes, id])
 
       if (Array.isArray(events)) {
