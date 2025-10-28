@@ -345,16 +345,52 @@ function Header(props: { user: User | null, view: 'time'|'settings'|'login'|'reg
             </div>
             {!props.user ? (
               <>
-                <button onClick={()=>{ props.onNavigate('login'); setOpen(false) }} style={{ ...btnStyle, background: '#1976d2', color: '#fff', width: '100%' }}>Login</button>
-                <button onClick={()=>{ props.onNavigate('register'); setOpen(false) }} style={{ ...btnStyle, background: '#455a64', color: '#fff', width: '100%' }}>Register</button>
+                <button
+                  onClick={()=>{ props.onNavigate('login'); setOpen(false) }}
+                  className="btn-glass"
+                  style={{ ...btnStyle, color: '#fff', width: '100%', ['--btn-color' as any]: '#1976d2' }}
+                >
+                  Login
+                </button>
+                <button
+                  onClick={()=>{ props.onNavigate('register'); setOpen(false) }}
+                  className="btn-glass"
+                  style={{ ...btnStyle, color: '#fff', width: '100%', ['--btn-color' as any]: '#455a64' }}
+                >
+                  Register
+                </button>
               </>
             ) : (
               <>
-                <button onClick={()=>{ props.onNavigate('time'); setOpen(false) }} style={{ ...btnStyle, background: 'rgba(255,255,255,0.12)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', width: '100%', textAlign: 'left' }}>Time Entry</button>
-                <button onClick={()=>{ props.onNavigate('new'); setOpen(false) }} style={{ ...btnStyle, background: 'rgba(255,255,255,0.12)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', width: '100%', textAlign: 'left' }}>New Entry</button>
-                <button onClick={()=>{ props.onNavigate('settings'); setOpen(false) }} style={{ ...btnStyle, background: 'rgba(255,255,255,0.12)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', width: '100%', textAlign: 'left' }}>User Settings</button>
+                <button
+                  onClick={()=>{ props.onNavigate('time'); setOpen(false) }}
+                  className="btn-glass"
+                  style={{ ...btnStyle, color: '#fff', width: '100%', textAlign: 'left', ['--btn-color' as any]: '#546e7a' }}
+                >
+                  Time Entry
+                </button>
+                <button
+                  onClick={()=>{ props.onNavigate('new'); setOpen(false) }}
+                  className="btn-glass"
+                  style={{ ...btnStyle, color: '#fff', width: '100%', textAlign: 'left', ['--btn-color' as any]: '#546e7a' }}
+                >
+                  New Entry
+                </button>
+                <button
+                  onClick={()=>{ props.onNavigate('settings'); setOpen(false) }}
+                  className="btn-glass"
+                  style={{ ...btnStyle, color: '#fff', width: '100%', textAlign: 'left', ['--btn-color' as any]: '#546e7a' }}
+                >
+                  User Settings
+                </button>
                 <div style={{ flex: 1 }} />
-                <button onClick={()=>{ props.onLogout(); setOpen(false) }} style={{ ...btnStyle, background: '#d32f2f', color: '#fff', width: '100%', textAlign: 'left' }}>Logout</button>
+                <button
+                  onClick={()=>{ props.onLogout(); setOpen(false) }}
+                  className="btn-glass"
+                  style={{ ...btnStyle, color: '#fff', width: '100%', textAlign: 'left', ['--btn-color' as any]: '#d32f2f' }}
+                >
+                  Logout
+                </button>
               </>
             )}
           </div>
@@ -373,7 +409,13 @@ function AuthScreen(props: { error: string | null, onLogin: (e:string,p:string)=
       <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="Email" type="email" style={{ width: '100%', boxSizing: 'border-box', padding: 8, border: '1px solid rgba(255,255,255,0.35)', borderRadius: 6, marginBottom: 8, background: 'rgba(0,0,0,0.5)', color: '#fff' }} />
       <input value={password} onChange={e=>setPassword(e.target.value)} placeholder="Password" type="password" style={{ width: '100%', boxSizing: 'border-box', padding: 8, border: '1px solid rgba(255,255,255,0.35)', borderRadius: 6, marginBottom: 8, background: 'rgba(0,0,0,0.5)', color: '#fff' }} />
       <div style={{ display: 'flex', gap: 8 }}>
-        <button onClick={()=>props.onLogin(email,password)} style={{ ...btnStyle, background: '#1976d2', color: 'white', flex: 1 }}>Login</button>
+        <button
+          onClick={()=>props.onLogin(email,password)}
+          className="btn3d btn-glass"
+          style={{ ...btnStyle, color: 'white', flex: 1, ['--btn-color' as any]: '#1976d2' }}
+        >
+          Login
+        </button>
       </div>
       {props.error && <div style={{ color: 'crimson', marginTop: 12 }}>{props.error}</div>}
     </div>
@@ -389,7 +431,13 @@ function RegisterScreen(props: { error: string | null, onRegister: (e:string,p:s
       <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="Email" type="email" style={{ width: '100%', boxSizing: 'border-box', padding: 8, border: '1px solid rgba(255,255,255,0.35)', borderRadius: 6, marginBottom: 8, background: 'rgba(0,0,0,0.5)', color: '#fff' }} />
       <input value={password} onChange={e=>setPassword(e.target.value)} placeholder="Password" type="password" style={{ width: '100%', boxSizing: 'border-box', padding: 8, border: '1px solid rgba(255,255,255,0.35)', borderRadius: 6, marginBottom: 8, background: 'rgba(0,0,0,0.5)', color: '#fff' }} />
       <div style={{ display: 'flex', gap: 8 }}>
-        <button onClick={()=>props.onRegister(email,password)} style={{ ...btnStyle, background: '#455a64', color: 'white', flex: 1 }}>Create Account</button>
+        <button
+          onClick={()=>props.onRegister(email,password)}
+          className="btn3d btn-glass"
+          style={{ ...btnStyle, color: 'white', flex: 1, ['--btn-color' as any]: '#455a64' }}
+        >
+          Create Account
+        </button>
       </div>
       {props.error && <div style={{ color: 'crimson', marginTop: 12 }}>{props.error}</div>}
     </div>
