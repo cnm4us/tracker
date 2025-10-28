@@ -137,6 +137,9 @@ input[type="radio"] {
   .pulse { animation: none; }
 }
 
+/* Muted am/pm indicator */
+.ampm { opacity: 0.5; }
+
 .logsRow {
   display: grid;
   /* Portrait: explicit tracks; fixed widths for Start/Stop so they align as columns */

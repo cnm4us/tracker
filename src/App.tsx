@@ -1,10 +1,15 @@
 import { useEffect, useState } from 'react'
 import './App.css'
-import { api, formatCivilTZ, formatDayMonTZ, formatDuration, ymdInTZ } from './api'
+import { api, formatCivilPartsTZ, formatDayMonTZ, formatDuration, ymdInTZ } from './api'
 import type { Entry, User } from './api'
 import sound from './sound'
 
 type Site = 'clinic' | 'remote'
+
+function renderCivil(d: Date, tz: string) {
+  const { hm, period } = formatCivilPartsTZ(d, tz)
+  return (<><span>{hm} </span><span className="ampm">{period}</span></>)
+}
 
 const containerStyle: React.CSSProperties = {
   maxWidth: 520,
@@ -206,7 +211,7 @@ function App() {
         <>
           <div style={{ marginTop: 8, marginBottom: 12, display: 'flex', gap: 12, alignItems: 'baseline', justifyContent: 'space-between' }}>
             <div style={{ flex: 1, fontSize: 20, fontWeight: 600, opacity: 0.5 }}>{ymdInTZ(now, tz)}</div>
-            <div style={{ flex: 1, textAlign: 'right', fontSize: 20, fontWeight: 600, opacity: 0.5 }}>{formatCivilTZ(now, tz)}</div>
+            <div style={{ flex: 1, textAlign: 'right', fontSize: 20, fontWeight: 600, opacity: 0.5 }}>{renderCivil(now, tz)}</div>
           </div>
 
           <div style={{ margin: '12px 0' }}>
@@ -288,8 +293,8 @@ function App() {
                 <div key={e.id} className="logsRow" style={{ padding: '8px 0', borderBottom: '1px solid rgba(238,238,238,0.5)' }}>
                   <div className="cellDay" style={{ cursor: 'pointer', textDecoration: 'none', color: '#ffb616' }} onClick={()=>{ setEditing(e); setView('edit') }}>{formatDayMonTZ(dateForDisplay, tz)}</div>
                   <div className="cellNotes" title={e.notes || ''}>{e.notes || ''}</div>
-                  <div className={`cellStart ${isActiveRow ? 'pulse' : ''}`}>{start ? formatCivilTZ(start, tz) : '—'}</div>
-                  <div className="cellStop">{stop ? formatCivilTZ(stop, tz) : '—'}</div>
+                  <div className={`cellStart ${isActiveRow ? 'pulse' : ''}`}>{start ? renderCivil(start, tz) : '—'}</div>
+                  <div className="cellStop">{stop ? renderCivil(stop, tz) : '—'}</div>
                   <div className="cellTotal" style={{ fontVariantNumeric: 'tabular-nums' as any }}>{formatDuration(dur ?? null)}</div>
                 </div>
               )
@@ -620,7 +625,7 @@ function NewEntryScreen(props: { mode?: 'new'|'edit', entry?: Entry, defaultSite
     <div>
       <div style={{ marginTop: 8, marginBottom: 12, display: 'flex', gap: 12, alignItems: 'baseline', justifyContent: 'space-between' }}>
         <div style={{ flex: 1, fontSize: 20, fontWeight: 600, opacity: 0.5 }}>{ymdInTZ(now, tz)}</div>
-        <div style={{ flex: 1, textAlign: 'right', fontSize: 20, fontWeight: 600, opacity: 0.5 }}>{formatCivilTZ(now, tz)}</div>
+          <div style={{ flex: 1, textAlign: 'right', fontSize: 20, fontWeight: 600, opacity: 0.5 }}>{renderCivil(now, tz)}</div>
       </div>
       <div style={{ marginTop: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>

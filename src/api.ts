@@ -102,6 +102,23 @@ export function formatCivilTZ(d: Date, tz: string): string {
   return `${h}:${m} ${period}`
 }
 
+// Returns time parts to allow styling the day period separately
+export function formatCivilPartsTZ(d: Date, tz: string): { hm: string; period: 'am'|'pm' } {
+  if (!(d instanceof Date) || isNaN(d.getTime())) return { hm: '—', period: 'am' }
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    hour12: true,
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: tz,
+  })
+  const parts = fmt.formatToParts(d)
+  const h = parts.find(p => p.type === 'hour')?.value || '0'
+  const m = parts.find(p => p.type === 'minute')?.value || '00'
+  const dayPeriod = parts.find(p => p.type === 'dayPeriod')?.value || 'AM'
+  const period = /am/i.test(dayPeriod) ? 'am' : 'pm'
+  return { hm: `${h}:${m}`, period }
+}
+
 export function formatDayMonTZ(d: Date, tz: string): string {
   if (!(d instanceof Date) || isNaN(d.getTime())) return ''
   const wd = new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: tz }).format(d)
