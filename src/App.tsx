@@ -180,7 +180,7 @@ function App() {
       ) : view === 'settings' ? (
         <SettingsScreen
           user={user}
-          onSave={async (tz) => { await api.updateMe(tz); setUser(u => (u ? { ...u, tz } : u)) }}
+          onSave={async (tz) => { await api.updateMe(tz); setUser(u => (u ? { ...u, tz } : u)); setView('time') }}
         />
       ) : view === 'new' ? (
         <NewEntryScreen
@@ -205,8 +205,8 @@ function App() {
       ) : (
         <>
           <div style={{ marginTop: 8, marginBottom: 12, display: 'flex', gap: 12, alignItems: 'baseline', justifyContent: 'space-between' }}>
-            <div style={{ flex: 1, fontSize: 20, fontWeight: 600 }}>{ymdInTZ(now, tz)}</div>
-            <div style={{ flex: 1, textAlign: 'right', fontSize: 20, fontWeight: 600 }}>{formatCivilTZ(now, tz)}</div>
+            <div style={{ flex: 1, fontSize: 20, fontWeight: 600, opacity: 0.5 }}>{ymdInTZ(now, tz)}</div>
+            <div style={{ flex: 1, textAlign: 'right', fontSize: 20, fontWeight: 600, opacity: 0.5 }}>{formatCivilTZ(now, tz)}</div>
           </div>
 
           <div style={{ margin: '12px 0' }}>
@@ -306,9 +306,9 @@ function Header(props: { user: User | null, view: 'time'|'settings'|'login'|'reg
   const [open, setOpen] = useState(false)
   const title =
     props.view === 'settings' ? 'Settings'
-    : props.view === 'new' ? 'New Entry'
+    : props.view === 'new' ? 'Manual Entry'
     : props.view === 'edit' ? 'Edit Entry'
-    : props.view === 'time' ? 'Time Entry'
+    : props.view === 'time' ? 'Timed Entry'
     : props.view === 'register' ? 'Register'
     : 'Login'
   return (
@@ -365,21 +365,21 @@ function Header(props: { user: User | null, view: 'time'|'settings'|'login'|'reg
                 <button
                   onClick={()=>{ props.onNavigate('time'); setOpen(false) }}
                   className="btn-glass"
-                  style={{ ...btnStyle, color: '#fff', width: '100%', textAlign: 'left', ['--btn-color' as any]: '#546e7a' }}
+                  style={{ ...btnStyle, color: '#fff', width: '100%', textAlign: 'left', ['--btn-color' as any]: '#ffb616' }}
                 >
-                  Time Entry
+                  Timed Entry
                 </button>
                 <button
                   onClick={()=>{ props.onNavigate('new'); setOpen(false) }}
                   className="btn-glass"
-                  style={{ ...btnStyle, color: '#fff', width: '100%', textAlign: 'left', ['--btn-color' as any]: '#546e7a' }}
+                  style={{ ...btnStyle, color: '#fff', width: '100%', textAlign: 'left', ['--btn-color' as any]: '#ffb616' }}
                 >
-                  New Entry
+                  Manual Entry
                 </button>
                 <button
                   onClick={()=>{ props.onNavigate('settings'); setOpen(false) }}
                   className="btn-glass"
-                  style={{ ...btnStyle, color: '#fff', width: '100%', textAlign: 'left', ['--btn-color' as any]: '#546e7a' }}
+                  style={{ ...btnStyle, color: '#fff', width: '100%', textAlign: 'left', ['--btn-color' as any]: '#ffb616' }}
                 >
                   User Settings
                 </button>
@@ -465,6 +465,7 @@ function SettingsScreen(props: { user: User, onSave: (tz:string)=>Promise<void> 
           fontSize: 18,
           minHeight: 44,
           boxSizing: 'border-box',
+          color: '#ffb616',
         }}
       >
         {tzList.map((z) => <option key={z} value={z}>{z}</option>)}
@@ -476,7 +477,8 @@ function SettingsScreen(props: { user: User, onSave: (tz:string)=>Promise<void> 
       <button
         disabled={saving}
         onClick={async()=>{ setSaving(true); try { await props.onSave(tz) } finally { setSaving(false) } }}
-        style={{ ...btnStyle, background: '#2e7d32', color: 'white', width: '100%' }}
+        className="btn3d btn-glass"
+        style={{ ...btnStyle, color: '#fff', width: '100%', ['--btn-color' as any]: '#2e7d32' }}
       >
         Save
       </button>
@@ -486,6 +488,7 @@ function SettingsScreen(props: { user: User, onSave: (tz:string)=>Promise<void> 
 
 function NewEntryScreen(props: { mode?: 'new'|'edit', entry?: Entry, defaultSite: Site, defaultEvents: string[], allEvents: string[], tz?: string, onCancel: ()=>void, onCreated: ()=>Promise<void> }) {
   const tz = props.tz || Intl.DateTimeFormat().resolvedOptions().timeZone
+  const now = useClock()
   const toHHMMInTZ = (iso?: string | null): string => {
     if (!iso) return ''
     const d = new Date(iso)
@@ -614,6 +617,10 @@ function NewEntryScreen(props: { mode?: 'new'|'edit', entry?: Entry, defaultSite
 
   return (
     <div>
+      <div style={{ marginTop: 8, marginBottom: 12, display: 'flex', gap: 12, alignItems: 'baseline', justifyContent: 'space-between' }}>
+        <div style={{ flex: 1, fontSize: 20, fontWeight: 600, opacity: 0.5 }}>{ymdInTZ(now, tz)}</div>
+        <div style={{ flex: 1, textAlign: 'right', fontSize: 20, fontWeight: 600, opacity: 0.5 }}>{formatCivilTZ(now, tz)}</div>
+      </div>
       <div style={{ marginTop: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <span style={{ fontWeight: 600 }}>Site:</span>
@@ -696,7 +703,7 @@ function NewEntryScreen(props: { mode?: 'new'|'edit', entry?: Entry, defaultSite
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 16 }}>
         <button
           disabled={submitting}
-          onClick={props.onCancel}
+          onClick={async()=>{ await sound.enable(); sound.playStop(); props.onCancel() }}
           className="btn3d btn-glass"
           style={{ ...btnStyle, color: '#fff', ['--btn-color' as any]: '#d32f2f' }}
         >
@@ -704,7 +711,7 @@ function NewEntryScreen(props: { mode?: 'new'|'edit', entry?: Entry, defaultSite
         </button>
         <button
           disabled={submitting}
-          onClick={submitManual}
+          onClick={async()=>{ await sound.enable(); sound.playStart(); await submitManual() }}
           className="btn3d btn-glass"
           style={{ ...btnStyle, color: '#fff', ['--btn-color' as any]: '#2e7d32' }}
         >
