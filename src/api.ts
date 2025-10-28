@@ -10,6 +10,7 @@ export type Entry = {
   stop_iso?: string | null
   start_local_date?: string
   duration_min?: number
+  events?: string[]
 }
 
 const base = '' // same-origin via nginx
@@ -56,7 +57,12 @@ export const api = {
         body: JSON.stringify({ site, events, start_local_date, hours, minutes, notes }),
       }
     ),
+  updateEntryTimes: (id: number, site: 'clinic'|'remote'|undefined, events: string[]|undefined, start_utc: string, stop_utc: string, notes: string|undefined) =>
+    request<{ id: number }>(`/api/entries/${id}`, { method: 'PATCH', body: JSON.stringify({ site, events, start_utc, stop_utc, notes }) }),
+  updateEntryDuration: (id: number, site: 'clinic'|'remote'|undefined, events: string[]|undefined, start_local_date: string, hours: number | null, minutes: number | null, notes: string|undefined) =>
+    request<{ id: number }>(`/api/entries/${id}`, { method: 'PATCH', body: JSON.stringify({ site, events, start_local_date, hours, minutes, notes }) }),
   list: (limit = 20) => request<{ entries: Entry[] }>(`/api/entries?limit=${limit}`),
+  getEntry: (id: number) => request<{ entry: Entry }>(`/api/entries/${id}`),
 }
 
 export function formatCivil(t: Date): string {

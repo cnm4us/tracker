@@ -23,7 +23,7 @@ entriesRouter.post('/start', requireAuth, async (req: AuthedRequest, res: Respon
   try {
     await withConn(async (conn) => {
       // Ensure no active entry exists
-      const [active] = await conn.query('SELECT id FROM entries WHERE user_id = ? AND stop_utc IS NULL LIMIT 1', [userId])
+      const [active] = await conn.query('SELECT id FROM entries WHERE user_id = ? AND start_utc IS NOT NULL AND stop_utc IS NULL LIMIT 1', [userId])
       if ((active as any[]).length) return res.status(409).json({ error: 'An entry is already active' })
 
       const startLocalDate = ymdInTZ(now, req.user!.tz || 'UTC')
@@ -39,13 +39,23 @@ entriesRouter.post('/start', requireAuth, async (req: AuthedRequest, res: Respon
         const pairs = (events as string[])
           .map((name) => m.get(name))
           .filter(Boolean)
-          .map((id) => [entryId, id])
-        if (pairs.length) await conn.query('INSERT IGNORE INTO entry_events (entry_id, event_type_id) VALUES ? as v', [pairs])
+          .map((id) => [entryId, id]) as Array<[number, number]>
+        if (pairs.length === 1) {
+          await conn.query('INSERT IGNORE INTO entry_events (entry_id, event_type_id) VALUES (?,?)', pairs[0])
+        } else if (pairs.length > 1) {
+          const placeholders = pairs.map(() => '(?,?)').join(',')
+          const flat: any[] = []
+          for (const p of pairs) flat.push(p[0], p[1])
+          await conn.query(`INSERT IGNORE INTO entry_events (entry_id, event_type_id) VALUES ${placeholders}`, flat)
+        }
       }
       res.status(201).json({ id: entryId, start_utc: now.toISOString() })
     })
   } catch (err) {
-    res.status(500).json({ error: 'Start failed' })
+    // eslint-disable-next-line no-console
+    console.error('Start failed:', err)
+    const anyErr: any = err
+    res.status(500).json({ error: 'Start failed', detail: anyErr?.sqlMessage || anyErr?.message || String(anyErr) })
   }
 })
 
@@ -55,7 +65,7 @@ entriesRouter.post('/stop', requireAuth, async (req: AuthedRequest, res: Respons
   const now = new Date()
   try {
     await withConn(async (conn) => {
-      const [rows] = await conn.query('SELECT id, start_utc FROM entries WHERE user_id = ? AND stop_utc IS NULL ORDER BY id DESC LIMIT 1', [userId])
+      const [rows] = await conn.query('SELECT id, start_utc FROM entries WHERE user_id = ? AND start_utc IS NOT NULL AND stop_utc IS NULL ORDER BY id DESC LIMIT 1', [userId])
       const arr = rows as any[]
       if (!arr.length) return res.status(404).json({ error: 'No active entry' })
       const entry = arr[0]
@@ -63,7 +73,10 @@ entriesRouter.post('/stop', requireAuth, async (req: AuthedRequest, res: Respons
       res.json({ id: entry.id, stop_utc: now.toISOString() })
     })
   } catch (err) {
-    res.status(500).json({ error: 'Stop failed' })
+    // eslint-disable-next-line no-console
+    console.error('Stop failed:', err)
+    const anyErr: any = err
+    res.status(500).json({ error: 'Stop failed', detail: anyErr?.sqlMessage || anyErr?.message || String(anyErr) })
   }
 })
 
@@ -108,8 +121,15 @@ entriesRouter.post('/', requireAuth, async (req: AuthedRequest, res: Response) =
         const pairs = (events as string[])
           .map((name) => m.get(name))
           .filter(Boolean)
-          .map((id) => [entryId, id])
-        if (pairs.length) await conn.query('INSERT IGNORE INTO entry_events (entry_id, event_type_id) VALUES ? as v', [pairs])
+          .map((id) => [entryId, id]) as Array<[number, number]>
+        if (pairs.length === 1) {
+          await conn.query('INSERT IGNORE INTO entry_events (entry_id, event_type_id) VALUES (?,?)', pairs[0])
+        } else if (pairs.length > 1) {
+          const placeholders = pairs.map(() => '(?,?)').join(',')
+          const flat: any[] = []
+          for (const p of pairs) flat.push(p[0], p[1])
+          await conn.query(`INSERT IGNORE INTO entry_events (entry_id, event_type_id) VALUES ${placeholders}`, flat)
+        }
       }
       res.status(201).json({ id: entryId })
     })
@@ -156,8 +176,15 @@ entriesRouter.patch('/:id', requireAuth, async (req: AuthedRequest, res: Respons
           const pairs = (events as string[])
             .map((name) => m.get(name))
             .filter(Boolean)
-            .map((eid) => [id, eid])
-          if (pairs.length) await conn.query('INSERT IGNORE INTO entry_events (entry_id, event_type_id) VALUES ? as v', [pairs])
+            .map((eid) => [id, eid]) as Array<[number, number]>
+          if (pairs.length === 1) {
+            await conn.query('INSERT IGNORE INTO entry_events (entry_id, event_type_id) VALUES (?,?)', pairs[0])
+          } else if (pairs.length > 1) {
+            const placeholders = pairs.map(() => '(?,?)').join(',')
+            const flat: any[] = []
+            for (const p of pairs) flat.push(p[0], p[1])
+            await conn.query(`INSERT IGNORE INTO entry_events (entry_id, event_type_id) VALUES ${placeholders}`, flat)
+          }
         }
       }
       res.json({ id })
@@ -187,5 +214,35 @@ entriesRouter.get('/', requireAuth, async (req: AuthedRequest, res: Response) =>
     })
   } catch (err) {
     res.status(500).json({ error: 'List failed' })
+  }
+})
+// Get a single entry with events
+entriesRouter.get('/:id', requireAuth, async (req: AuthedRequest, res: Response) => {
+  const id = Number(req.params.id)
+  if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid id' })
+  const userId = req.user!.id
+  try {
+    await withConn(async (conn) => {
+      const [rows] = await conn.query(
+        `SELECT e.*, 
+                DATE_FORMAT(e.start_utc, '%Y-%m-%dT%H:%i:%sZ') as start_iso,
+                IFNULL(DATE_FORMAT(e.stop_utc, '%Y-%m-%dT%H:%i:%sZ'), NULL) as stop_iso
+         FROM entries e
+         WHERE e.id = ? AND e.user_id = ?
+         LIMIT 1`,
+        [id, userId]
+      )
+      const arr = rows as any[]
+      if (!arr.length) return res.status(404).json({ error: 'Not found' })
+      const entry = arr[0]
+      const [evRows] = await conn.query(
+        `SELECT t.name FROM entry_events ee JOIN event_types t ON t.id = ee.event_type_id WHERE ee.entry_id = ? ORDER BY t.name`,
+        [id]
+      )
+      const events = (evRows as any[]).map(r => r.name)
+      res.json({ entry: { ...entry, events } })
+    })
+  } catch (err) {
+    res.status(500).json({ error: 'Fetch failed' })
   }
 })

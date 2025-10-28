@@ -35,7 +35,8 @@ function App() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [view, setView] = useState<'time' | 'settings' | 'login' | 'new'>('login')
+  const [view, setView] = useState<'time' | 'settings' | 'login' | 'new' | 'edit'>('login')
+  const [editing, setEditing] = useState<Entry | null>(null)
 
   const [site, setSite] = useState<Site>('clinic')
   const [events, setEvents] = useState<string[]>([])
@@ -68,7 +69,7 @@ function App() {
     try {
       const { entries } = await api.list(20)
       setEntries(entries)
-      const active = entries.find(e => e.stop_utc === null)
+      const active = entries.find(e => e.start_iso && !e.stop_iso)
       setActiveEntry(active || null)
     } catch (e: any) {
       // ignore when unauthenticated
@@ -123,7 +124,7 @@ function App() {
       setNotes('')
       await refreshEntries()
     } catch (e: any) {
-      alert(e?.data?.error || 'Start failed')
+      alert(e?.data?.detail || e?.data?.error || 'Start failed')
     }
   }
 
@@ -162,8 +163,20 @@ function App() {
           defaultSite={site}
           defaultEvents={events}
           allEvents={allEvents}
+          tz={tz}
           onCancel={() => setView('time')}
           onCreated={async () => { await refreshEntries(); setView('time') }}
+        />
+      ) : view === 'edit' && editing ? (
+        <NewEntryScreen
+          mode="edit"
+          entry={editing}
+          defaultSite={(editing.site as any) || site}
+          defaultEvents={events}
+          allEvents={allEvents}
+          tz={tz}
+          onCancel={() => { setEditing(null); setView('time') }}
+          onCreated={async () => { await refreshEntries(); setEditing(null); setView('time') }}
         />
       ) : (
         <>
@@ -227,7 +240,7 @@ function App() {
                 : (start && stop ? Math.round((+stop - +start) / 60000) : null)
               return (
                 <div key={e.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee' }}>
-                  <div style={{ width: '34%' }}>{formatDayMonTZ(dateForDisplay, tz)}</div>
+                  <div style={{ width: '34%', cursor: 'pointer', textDecoration: 'underline' }} onClick={()=>{ setEditing(e); setView('edit') }}>{formatDayMonTZ(dateForDisplay, tz)}</div>
                   <div style={{ width: '22%', textAlign: 'center' }}>{start ? formatCivilTZ(start, tz) : '—'}</div>
                   <div style={{ width: '22%', textAlign: 'center' }}>{stop ? formatCivilTZ(stop, tz) : '—'}</div>
                   <div style={{ width: '22%', textAlign: 'right', fontVariantNumeric: 'tabular-nums' as any }}>{formatDuration(dur ?? null)}</div>
@@ -347,17 +360,64 @@ function SettingsScreen(props: { user: User, onSave: (tz:string)=>Promise<void> 
   )
 }
 
-function NewEntryScreen(props: { defaultSite: Site, defaultEvents: string[], allEvents: string[], onCancel: ()=>void, onCreated: ()=>Promise<void> }) {
-  const [site, setSite] = useState<Site>(props.defaultSite)
-  const [events, setEvents] = useState<string[]>(props.defaultEvents)
-  const [notes, setNotes] = useState('')
-  const [startDate, setStartDate] = useState<string>('')
-  const [startTime, setStartTime] = useState<string>('')
+function NewEntryScreen(props: { mode?: 'new'|'edit', entry?: Entry, defaultSite: Site, defaultEvents: string[], allEvents: string[], tz?: string, onCancel: ()=>void, onCreated: ()=>Promise<void> }) {
+  const tz = props.tz || Intl.DateTimeFormat().resolvedOptions().timeZone
+  const toHHMMInTZ = (iso?: string | null): string => {
+    if (!iso) return ''
+    const d = new Date(iso)
+    if (!(d instanceof Date) || isNaN(d.getTime())) return ''
+    const fmt = new Intl.DateTimeFormat('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit', timeZone: tz })
+    return fmt.format(d) // returns HH:MM in given tz
+  }
+  const toYMD = (val?: string | null): string => {
+    if (!val) return ''
+    // Already YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return val
+    // Try parse as Date string
+    const d = new Date(val)
+    if (!(d instanceof Date) || isNaN(d.getTime())) return ''
+    // Use UTC parts to avoid tz shift
+    const y = d.getUTCFullYear()
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0')
+    const day = String(d.getUTCDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }
+  const [site, setSite] = useState<Site>((props.entry?.site as Site) || props.defaultSite)
+  const [events, setEvents] = useState<string[]>(props.entry?.events || props.defaultEvents)
+  const [notes, setNotes] = useState(props.entry?.notes || '')
+  const [startDate, setStartDate] = useState<string>(toYMD(props.entry?.start_local_date))
+  const [startTime, setStartTime] = useState<string>(toHHMMInTZ(props.entry?.start_iso))
   const [stopDate, setStopDate] = useState<string>('')
-  const [stopTime, setStopTime] = useState<string>('')
+  const [stopTime, setStopTime] = useState<string>(toHHMMInTZ(props.entry?.stop_iso))
   const [durH, setDurH] = useState<string>('')
   const [durM, setDurM] = useState<string>('')
   const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (props.entry && props.entry.duration_min != null) {
+      const d = props.entry.duration_min
+      const hh = Math.floor(d / 60)
+      const mm = d % 60
+      if (hh > 0) setDurH(String(hh))
+      if (mm > 0) setDurM(String(mm))
+    }
+  }, [props.entry])
+
+  // When editing, fetch events for the entry so we can pre-check them
+  useEffect(() => {
+    (async () => {
+      if (props.mode === 'edit' && props.entry?.id) {
+        try {
+          const { entry } = await api.getEntry(props.entry.id)
+          if (entry?.events) setEvents(entry.events)
+          if (entry?.notes) setNotes(entry.notes)
+          if (entry?.start_local_date) setStartDate(toYMD(entry.start_local_date))
+          if (entry?.start_iso) setStartTime(toHHMMInTZ(entry.start_iso))
+          if (entry?.stop_iso) setStopTime(toHHMMInTZ(entry.stop_iso))
+        } catch {}
+      }
+    })()
+  }, [props.mode, props.entry?.id])
 
   function toggleEvent(name: string) {
     setEvents(prev => prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name])
@@ -365,7 +425,8 @@ function NewEntryScreen(props: { defaultSite: Site, defaultEvents: string[], all
 
   function toIso(date: string, time: string): string | null {
     if (!date || !time) return null
-    return new Date(`${date}T${time}:00Z`).toISOString()
+    // Interpret date+time as in user's local timezone, then convert to UTC ISO
+    return new Date(`${date}T${time}:00`).toISOString()
   }
 
   // Derive stop time when duration is provided; assume stop date = start date
@@ -374,7 +435,7 @@ function NewEntryScreen(props: { defaultSite: Site, defaultEvents: string[], all
     const h = parseInt(durH || '0', 10)
     const m = parseInt(durM || '0', 10)
     if (isNaN(h) && isNaN(m)) return
-    const base = new Date(`${startDate}T${startTime}:00Z`)
+    const base = new Date(`${startDate}T${startTime}:00`)
     if (Number.isFinite(h)) base.setHours(base.getHours() + (h || 0))
     if (Number.isFinite(m)) base.setMinutes(base.getMinutes() + (m || 0))
     const hh = String(base.getUTCHours()).padStart(2, '0')
@@ -393,7 +454,11 @@ function NewEntryScreen(props: { defaultSite: Site, defaultEvents: string[], all
       if ((!h && !m) || ((h ?? 0) === 0 && (m ?? 0) === 0)) return alert('Please enter a positive duration')
       setSubmitting(true)
       try {
-        await api.manualDuration(site, events, startDate, h, m, notes)
+        if (props.mode === 'edit' && props.entry) {
+          await api.updateEntryDuration(props.entry.id, site, undefined, startDate, h, m, notes || undefined)
+        } else {
+          await api.manualDuration(site, events, startDate, h, m, notes)
+        }
         await props.onCreated()
       } catch (err:any) {
         alert(err?.data?.error || 'Create failed')
@@ -409,7 +474,11 @@ function NewEntryScreen(props: { defaultSite: Site, defaultEvents: string[], all
     if (!s || !e) return alert('Please fill start and stop time')
     setSubmitting(true)
     try {
-      await api.manual(site, events, s, e, notes)
+      if (props.mode === 'edit' && props.entry) {
+        await api.updateEntryTimes(props.entry.id, site, undefined, s, e, notes || undefined)
+      } else {
+        await api.manual(site, events, s, e, notes)
+      }
       await props.onCreated()
     } catch (err:any) {
       alert(err?.data?.error || 'Create failed')
@@ -480,7 +549,8 @@ function NewEntryScreen(props: { defaultSite: Site, defaultEvents: string[], all
           <input
             type="time"
             value={stopTime}
-            readOnly
+            onChange={e=>setStopTime(e.target.value)}
+            readOnly={!!(durH || durM)}
             style={{ width:'80%', maxWidth:'100%', padding: '8px', borderRadius: 8, border: '1px solid #fff', boxSizing: 'border-box', fontSize: 18, minHeight: 44, background: 'transparent', display: 'block', marginLeft: 'auto' }}
           />
         </div>
