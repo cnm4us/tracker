@@ -262,13 +262,14 @@ function App() {
               }
               const start = e.start_iso ? new Date(e.start_iso) : null
               const stop = e.stop_iso ? new Date(e.stop_iso) : null
+              const isActiveRow = !!(start && !stop)
               const dur = (typeof e.duration_min === 'number')
                 ? e.duration_min
                 : (start && stop ? Math.round((+stop - +start) / 60000) : null)
               return (
                 <div key={e.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid rgba(238,238,238,0.5)' }}>
                   <div style={{ width: '34%', cursor: 'pointer', textDecoration: 'none', color: '#ffb616' }} onClick={()=>{ setEditing(e); setView('edit') }}>{formatDayMonTZ(dateForDisplay, tz)}</div>
-                  <div style={{ width: '22%', textAlign: 'center' }}>{start ? formatCivilTZ(start, tz) : '—'}</div>
+                  <div className={isActiveRow ? 'pulse' : undefined} style={{ width: '22%', textAlign: 'center' }}>{start ? formatCivilTZ(start, tz) : '—'}</div>
                   <div style={{ width: '22%', textAlign: 'center' }}>{stop ? formatCivilTZ(stop, tz) : '—'}</div>
                   <div style={{ width: '22%', textAlign: 'right', fontVariantNumeric: 'tabular-nums' as any }}>{formatDuration(dur ?? null)}</div>
                 </div>

@@ -97,6 +97,18 @@ input[type="radio"] {
   padding: 0;
 }
 
+/* Subtle pulsing for active Start time in log */
+@keyframes pulseOpacity {
+  from { opacity: 1; }
+  to { opacity: 0.5; }
+}
+.pulse {
+  animation: pulseOpacity 0.25s ease-in-out infinite alternate; /* ~2 times/sec full cycle */
+}
+@media (prefers-reduced-motion: reduce) {
+  .pulse { animation: none; }
+}
+
 h1 {
   font-size: 3.2em;
   line-height: 1.1;
