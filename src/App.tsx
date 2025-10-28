@@ -121,7 +121,6 @@ function App() {
     }
     try {
       await api.start(site, events, notes)
-      setNotes('')
       await refreshEntries()
     } catch (e: any) {
       alert(e?.data?.detail || e?.data?.error || 'Start failed')
@@ -130,7 +129,9 @@ function App() {
 
   async function clickStop() {
     try {
-      await api.stop()
+      await api.stop(notes)
+      setNotes('')
+      setEvents([])
       await refreshEntries()
     } catch (e: any) {
       alert(e?.data?.error || 'Stop failed')
@@ -209,6 +210,7 @@ function App() {
               value={notes}
               onChange={e=>setNotes(e.target.value)}
               rows={2}
+              className="avoidZoom"
               style={{ width: '100%', padding: 8, borderRadius: 8, border: '1px solid #ccc', resize: 'vertical', boxSizing: 'border-box' }}
               placeholder="Optional notes"
             />
@@ -509,7 +511,7 @@ function NewEntryScreen(props: { mode?: 'new'|'edit', entry?: Entry, defaultSite
       </div>
 
       <div style={{ margin: '12px 0' }}>
-        <textarea value={notes} onChange={e=>setNotes(e.target.value)} rows={2} style={{ width: '100%', padding: 8, borderRadius: 8, border: '1px solid #ccc', resize: 'vertical', boxSizing: 'border-box' }} placeholder="Optional notes" />
+        <textarea className="avoidZoom" value={notes} onChange={e=>setNotes(e.target.value)} rows={2} style={{ width: '100%', padding: 8, borderRadius: 8, border: '1px solid #ccc', resize: 'vertical', boxSizing: 'border-box' }} placeholder="Optional notes" />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>

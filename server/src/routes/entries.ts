@@ -69,7 +69,12 @@ entriesRouter.post('/stop', requireAuth, async (req: AuthedRequest, res: Respons
       const arr = rows as any[]
       if (!arr.length) return res.status(404).json({ error: 'No active entry' })
       const entry = arr[0]
-      await conn.query('UPDATE entries SET stop_utc = ?, duration_min = TIMESTAMPDIFF(MINUTE, start_utc, ?) WHERE id = ?', [now, now, entry.id])
+      const incomingNotes = (req.body && (req.body as any).notes) as string | undefined
+      if (incomingNotes !== undefined) {
+        await conn.query('UPDATE entries SET stop_utc = ?, duration_min = TIMESTAMPDIFF(MINUTE, start_utc, ?), notes = ? WHERE id = ?', [now, now, incomingNotes, entry.id])
+      } else {
+        await conn.query('UPDATE entries SET stop_utc = ?, duration_min = TIMESTAMPDIFF(MINUTE, start_utc, ?) WHERE id = ?', [now, now, entry.id])
+      }
       res.json({ id: entry.id, stop_utc: now.toISOString() })
     })
   } catch (err) {

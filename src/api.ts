@@ -46,7 +46,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ site, events, notes }),
     }),
-  stop: () => request<{ id: number; stop_utc: string }>('/api/entries/stop', { method: 'POST' }),
+  stop: (notes?: string) =>
+    request<{ id: number; stop_utc: string }>(
+      '/api/entries/stop',
+      { method: 'POST', body: JSON.stringify({ notes }) }
+    ),
   manual: (site: 'clinic'|'remote', events: string[], start_utc: string, stop_utc: string, notes: string) =>
     request<{ id: number }>('/api/entries', { method: 'POST', body: JSON.stringify({ site, events, start_utc, stop_utc, notes }) }),
   manualDuration: (site: 'clinic'|'remote', events: string[], start_local_date: string, hours: number | null, minutes: number | null, notes: string) =>

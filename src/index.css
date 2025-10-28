@@ -30,6 +30,11 @@ body {
   overflow-x: hidden; /* prevent horizontal scroll */
 }
 
+/* Prevent iOS Safari zoom on focus by ensuring >=16px fonts */
+input, select, textarea { font-size: 16px; }
+.avoidZoom { font-size: 17px; }
+html { -webkit-text-size-adjust: 100%; }
+
 /* Normalize time input appearance/height across browsers (esp. iOS Safari) */
 .timeField {
   height: 44px;
