@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { api, Entry, formatCivilTZ, formatDayMonTZ, formatDuration, User, ymdInTZ } from './api'
+import sound from './sound'
 
 type Site = 'clinic' | 'remote'
 
@@ -122,6 +123,7 @@ function App() {
       await refreshEntries()
     }
     try {
+      await sound.enable(); sound.playStart()
       await api.start(site, events, notes)
       await refreshEntries()
     } catch (e: any) {
@@ -131,6 +133,7 @@ function App() {
 
   async function clickStop() {
     try {
+      await sound.enable(); sound.playStop()
       setStopping(true)
       await api.stop(notes)
       setNotes('')
@@ -239,7 +242,7 @@ function App() {
               Stop
             </button>
             <button
-              onClick={()=>setView('new')}
+              onClick={async ()=>{ await sound.enable(); sound.playNew(); setView('new') }}
               className="btn3d"
               style={{ ...btnStyle, background: '#546e7a', color: 'white' }}
             >
@@ -357,6 +360,7 @@ function SettingsScreen(props: { user: User, onSave: (tz:string)=>Promise<void> 
   const [tz, setTz] = useState<string>(props.user.tz || Intl.DateTimeFormat().resolvedOptions().timeZone)
   const tzList = (Intl as any).supportedValuesOf ? (Intl as any).supportedValuesOf('timeZone') as string[] : [tz]
   const [saving, setSaving] = useState(false)
+  const [sounds, setSounds] = useState<boolean>(() => sound.isEnabled())
   return (
     <div style={{ marginTop: 12 }}>
       <label style={{ display:'block', fontSize: 18, color: '#fff', marginBottom: 6 }}>Time Zone</label>
@@ -377,6 +381,10 @@ function SettingsScreen(props: { user: User, onSave: (tz:string)=>Promise<void> 
       >
         {tzList.map((z) => <option key={z} value={z}>{z}</option>)}
       </select>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '8px 0 16px' }}>
+        <input className="brand" id="sounds" type="checkbox" checked={sounds} onChange={(e)=>{ setSounds(e.target.checked); sound.setEnabled(e.target.checked) }} />
+        <label htmlFor="sounds">Button Sounds</label>
+      </div>
       <button
         disabled={saving}
         onClick={async()=>{ setSaving(true); try { await props.onSave(tz) } finally { setSaving(false) } }}
