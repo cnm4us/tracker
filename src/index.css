@@ -137,6 +137,48 @@ input[type="radio"] {
   .pulse { animation: none; }
 }
 
+.logsRow {
+  display: grid;
+  /* Portrait: explicit tracks; fixed widths for Start/Stop so they align as columns */
+  grid-template-areas: 'day . start . stop . total';
+  /* Fine-tuned spacers for portrait: Day↔Start 5px, Start↔Stop 15px, Stop↔Total 8px; Total fixed width for alignment */
+  grid-template-columns: auto 5px 8ch 15px 8ch 8px 6ch; /* Day | 5 | Start(8ch) | 15 | Stop(8ch) | 8 | Total(6ch) */
+  align-items: center;
+  gap: 0; /* use explicit spacer tracks instead of gap */
+}
+.cellDay { grid-area: day; }
+.cellNotes { grid-area: notes; }
+.cellStart { grid-area: start; text-align: center; white-space: nowrap; }
+.cellStop { grid-area: stop; text-align: center; white-space: nowrap; }
+.cellTotal { grid-area: total; text-align: right; white-space: nowrap; }
+.cellNotes {
+  display: none; /* hidden in portrait */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.8;
+}
+.logsWide { /* default constrained in portrait via container */ }
+
+@media (orientation: landscape) {
+  .logsWide {
+    width: 100vw;               /* span full viewport */
+    margin-left: calc(50% - 50vw);
+    margin-right: calc(50% - 50vw);
+    padding-left: 16px;         /* preserve side padding */
+    padding-right: 16px;
+    box-sizing: border-box;
+  }
+  .logsRow {
+    /* Landscape: explicit tracks; fixed widths for Start/Stop/Total; Day has a minimum width for clearer separation from Notes */
+    grid-template-areas: 'day . notes . start . stop . total';
+    /* Day(min 9ch) | 16 | Notes(1fr) | 18 | Start(8ch) | 16 | Stop(8ch) | 32 | Total(6ch) */
+    grid-template-columns: minmax(9ch, auto) 16px minmax(0, 1fr) 18px 8ch 16px 8ch 32px 6ch;
+    gap: 0;
+  }
+  .cellNotes { display: block; }
+}
+
 h1 {
   font-size: 3.2em;
   line-height: 1.1;
