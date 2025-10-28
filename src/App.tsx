@@ -46,6 +46,7 @@ function App() {
 
   const [entries, setEntries] = useState<Entry[]>([])
   const [activeEntry, setActiveEntry] = useState<Entry | null>(null)
+  const [stopping, setStopping] = useState(false)
 
   const now = useClock()
 
@@ -130,12 +131,15 @@ function App() {
 
   async function clickStop() {
     try {
+      setStopping(true)
       await api.stop(notes)
       setNotes('')
       setEvents([])
       await refreshEntries()
     } catch (e: any) {
       alert(e?.data?.error || 'Stop failed')
+    } finally {
+      setStopping(false)
     }
   }
 
@@ -220,9 +224,27 @@ function App() {
           </div>
 
           <div style={{ ...rowStyle, justifyContent: 'space-between', marginTop: 8, marginBottom: 16 }}>
-            <button onClick={clickStart} style={{ ...btnStyle, background: activeEntry ? '#1976d2' : '#2e7d32', color: 'white' }}>Start</button>
-            <button onClick={clickStop} style={{ ...btnStyle, background: '#d32f2f', color: 'white' }}>Stop</button>
-            <button onClick={()=>setView('new')} style={{ ...btnStyle, background: '#546e7a', color: 'white' }}>New</button>
+            <button
+              onClick={clickStart}
+              className={`btn3d ${activeEntry ? 'btn3d-pressed' : ''}`}
+              style={{ ...btnStyle, background: activeEntry ? '#1976d2' : '#2e7d32', color: 'white' }}
+            >
+              Start
+            </button>
+            <button
+              onClick={clickStop}
+              className={`btn3d ${stopping ? 'btn3d-pressed' : ''}`}
+              style={{ ...btnStyle, background: '#d32f2f', color: 'white' }}
+            >
+              Stop
+            </button>
+            <button
+              onClick={()=>setView('new')}
+              className="btn3d"
+              style={{ ...btnStyle, background: '#546e7a', color: 'white' }}
+            >
+              New
+            </button>
           </div>
 
           <h3 style={{ margin: '16px 0 8px' }}>Recent</h3>
