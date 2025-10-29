@@ -210,6 +210,15 @@ h1 {
 .totalInner .totalCenter { text-align: center; }
 .totalInner .totalRight { text-align: right; font-variant-numeric: tabular-nums; }
 
+/* Flash highlight for restored row */
+@keyframes flashRowBg {
+  0% { background: rgba(255, 182, 22, 0.32); }
+  100% { background: transparent; }
+}
+.flash-highlight {
+  animation: flashRowBg 1200ms ease-in-out 1;
+}
+
 h1 {
   font-size: 3.2em;
   line-height: 1.1;

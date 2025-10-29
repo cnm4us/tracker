@@ -53,7 +53,7 @@ function App() {
   const [error, setError] = useState<string | null>(null)
   const [view, setView] = useState<'time' | 'settings' | 'login' | 'register' | 'new' | 'edit' | 'search'>('login')
   const [returnView, setReturnView] = useState<'time'|'search'|null>(null)
-  type SearchState = { begin: string; end: string; site: 'all'|'clinic'|'remote'; events: string[]; results: Entry[] }
+  type SearchState = { begin: string; end: string; site: 'all'|'clinic'|'remote'; events: string[]; results: Entry[]; scrollY?: number; highlightId?: number }
   const defaultBegin = useMemo(() => { const d=new Date(); d.setDate(d.getDate()-7); const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}` }, [])
   const defaultEnd = useMemo(() => { const d=new Date(); const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}` }, [])
   const [searchState, setSearchState] = useState<SearchState>({ begin: defaultBegin, end: defaultEnd, site: 'all', events: [], results: [] })
@@ -203,9 +203,17 @@ function App() {
     return { ytd, mtd, wtd, tdy }
   }, [totalsEntries, tz, todayYMD, ytdStart, mtdStart, wtdStart])
 
-  if (loading) return <div style={containerStyle}>Loading…</div>
-
   const isAuthView = !user && (view === 'login' || view === 'register')
+
+  // Global scroll policy: always start at top on view change,
+  // except when returning to Log Search where we restore prior scroll.
+  useEffect(() => {
+    // If navigating to search and we have a saved scrollY, let LogSearchScreen restore it.
+    if (view === 'search' && (searchState.scrollY != null)) return
+    try { window.scrollTo({ top: 0, behavior: 'auto' }) } catch {}
+  }, [view])
+
+  if (loading) return <div style={containerStyle}>Loading…</div>
   return (
     <div style={isAuthView ? authBgStyle : undefined}>
       <div style={containerStyle}>
@@ -267,7 +275,7 @@ function App() {
           tz={tz}
           initialState={searchState}
           onStateChange={(st)=>setSearchState(st)}
-          onOpenEntry={(entry)=>{ setReturnView('search'); setEditing(entry); setView('edit') }}
+          onOpenEntry={(entry)=>{ try { setSearchState(s=>({ ...s, scrollY: window.scrollY, highlightId: entry.id })) } catch {}; setReturnView('search'); setEditing(entry); setView('edit') }}
         />
       ) : (
         <>
@@ -842,7 +850,7 @@ function NewEntryScreen(props: { mode?: 'new'|'edit', entry?: Entry, defaultSite
   )
 }
 
-type SearchState = { begin: string; end: string; site: 'all'|'clinic'|'remote'; events: string[]; results: Entry[] }
+type SearchState = { begin: string; end: string; site: 'all'|'clinic'|'remote'; events: string[]; results: Entry[]; scrollY?: number; highlightId?: number }
 function LogSearchScreen(props: { allEvents: string[], tz?: string, initialState?: SearchState, onStateChange?: (st: SearchState)=>void, onOpenEntry: (e: Entry)=>void }) {
   const tz = props.tz || Intl.DateTimeFormat().resolvedOptions().timeZone
   const [begin, setBegin] = useState<string>(props.initialState?.begin || '')
@@ -940,6 +948,31 @@ function LogSearchScreen(props: { allEvents: string[], tz?: string, initialState
   useEffect(() => {
     props.onStateChange?.({ begin, end, site, events, results })
   }, [begin, end, site, events])
+
+  // Restore scroll position and flash the last-edited row when returning from Edit
+  useEffect(() => {
+    const sc = props.initialState?.scrollY
+    const hid = props.initialState?.highlightId
+    if ((sc != null && !isNaN(sc)) || (hid != null)) {
+      // Wait a frame to ensure DOM is painted
+      requestAnimationFrame(() => {
+        if (typeof sc === 'number' && !isNaN(sc)) {
+          try { window.scrollTo(0, sc) } catch {}
+        }
+        if (hid != null) {
+          try {
+            const el = document.querySelector(`[data-entry-id="${hid}"]`) as HTMLElement | null
+            if (el) {
+              el.classList.add('flash-highlight')
+              setTimeout(() => { el.classList.remove('flash-highlight') }, 1200)
+            }
+          } catch {}
+        }
+        // Clear markers so it doesn't retrigger on subsequent renders
+        props.onStateChange?.({ begin, end, site, events, results, scrollY: undefined, highlightId: undefined })
+      })
+    }
+  }, [results])
 
   
   const displayRows = useMemo(() => {
@@ -1043,7 +1076,7 @@ function LogSearchScreen(props: { allEvents: string[], tz?: string, initialState
                 const stop = e.stop_iso ? new Date(e.stop_iso) : null
                 const dur2 = timeDurationMinutes(e.start_iso, e.stop_iso, e.duration_min)
                 return (
-                  <div key={e.id} className="logsRow" style={{ padding: '8px 0', borderBottom: '1px solid rgba(238,238,238,0.5)' }}>
+                <div key={e.id} className="logsRow" data-entry-id={e.id} style={{ padding: '8px 0', borderBottom: '1px solid rgba(238,238,238,0.5)' }}>
                     <div className="cellDay" style={{ color: '#ffb616', cursor: 'pointer' }} onClick={()=>props.onOpenEntry(e)}>{formatDayMonTZ(dateForDisplay, tz)}</div>
                     <div className="cellNotes" title={e.notes || ''}>{e.notes || ''}</div>
                     <div className="cellStart">{start ? renderCivil(start, tz) : '—'}</div>
