@@ -179,7 +179,26 @@ input[type="radio"] {
     grid-template-columns: minmax(9ch, auto) 16px minmax(0, 1fr) 18px 8ch 16px 8ch 32px 6ch;
     gap: 0;
   }
-  .cellNotes { display: block; }
+.cellNotes { display: block; }
+}
+
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+}
+
+/* Weekly total rows (full-width section headers in logs) */
+.logsRow.total { 
+  grid-template-columns: 1fr; 
+}
+.logsRow .totalCell {
+  grid-column: 1 / -1;
+  padding: 6px 8px;
+  border-left: 3px solid #ffb616;
+  background: rgba(255,255,255,0.06);
+  font-weight: 700;
+  color: #fff;
+  border-radius: 6px;
 }
 
 h1 {

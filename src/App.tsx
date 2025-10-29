@@ -782,6 +782,9 @@ function LogSearchScreen(props: { allEvents: string[], tz?: string, initialState
   const [events, setEvents] = useState<string[]>(props.initialState?.events || [])
   const [results, setResults] = useState<Entry[]>(props.initialState?.results || [])
   const [loading, setLoading] = useState(false)
+  const [showTotals, setShowTotals] = useState<boolean>(() => {
+    try { const v = localStorage.getItem('show_weekly_totals'); return v === null ? true : v !== '0' } catch { return true }
+  })
 
   // Initialize default dates if not provided
   useEffect(() => {
@@ -866,6 +869,58 @@ function LogSearchScreen(props: { allEvents: string[], tz?: string, initialState
     props.onStateChange?.({ begin, end, site, events, results })
   }, [begin, end, site, events])
 
+  function ymdToMD(ymd: string): string { const parts = ymd.split('-'); const m = parts[1]; const d = parts[2]; return `${m}/${d}` }
+  function normalizeYMD(val?: string | null): string {
+    if (!val) return ''
+    const s = String(val)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
+    if (s.includes('T')) return s.slice(0, 10)
+    // Fallback: try to parse as Date and return YMD in local tz
+    const d = new Date(s)
+    if (!isNaN(d.getTime())) {
+      const y = new Intl.DateTimeFormat('en-US', { year: 'numeric', timeZone: tz }).format(d)
+      const m = new Intl.DateTimeFormat('en-US', { month: '2-digit', timeZone: tz }).format(d)
+      const day = new Intl.DateTimeFormat('en-US', { day: '2-digit', timeZone: tz }).format(d)
+      return `${y}-${m}-${day}`
+    }
+    return ''
+  }
+  function weekStartYMD(ymd: string): string {
+    const dt = new Date(ymd + 'T00:00:00Z')
+    const wd = dt.getUTCDay() // 0=Sun
+    const start = new Date(dt); start.setUTCDate(start.getUTCDate() - wd)
+    const y = start.getUTCFullYear(); const m = String(start.getUTCMonth()+1).padStart(2,'0'); const d = String(start.getUTCDate()).padStart(2,'0')
+    return `${y}-${m}-${d}`
+  }
+  const displayRows = useMemo(() => {
+    const rows: Array<{ type:'total'; wkStart:string; wkEnd:string; total:number } | { type:'entry'; entry: Entry }> = []
+    if (!results.length) return rows
+    const toYMD = (e: Entry) => normalizeYMD(e.start_local_date) || toYMDInTZ(e.start_iso) || ''
+    const dur = (e: Entry) => (typeof e.duration_min === 'number') ? e.duration_min : (e.start_iso && e.stop_iso ? Math.max(0, Math.round((+new Date(e.stop_iso) - +new Date(e.start_iso))/60000)) : 0)
+    const totals = new Map<string, { total:number; start:string; end:string }>()
+    for (const e of results) {
+      const ymd = toYMD(e); if (!ymd) continue
+      const ws = weekStartYMD(ymd)
+      const endDt = new Date(ws + 'T00:00:00Z'); endDt.setUTCDate(endDt.getUTCDate()+6)
+      const we = `${endDt.getUTCFullYear()}-${String(endDt.getUTCMonth()+1).padStart(2,'0')}-${String(endDt.getUTCDate()).padStart(2,'0')}`
+      const cur = totals.get(ws) || { total: 0, start: ws, end: we }
+      cur.total += dur(e)
+      totals.set(ws, cur)
+    }
+    const seen = new Set<string>()
+    for (const e of results) {
+      const ymd = toYMD(e); const ws = ymd ? weekStartYMD(ymd) : ''
+      if (showTotals && ws && !seen.has(ws)) { const t = totals.get(ws)!; rows.push({ type:'total', wkStart:t.start, wkEnd:t.end, total:t.total }); seen.add(ws) }
+      rows.push({ type:'entry', entry: e })
+    }
+    if (showTotals) {
+      let g = 0; let minY: string | null = null; let maxY: string | null = null
+      for (const e of results) { const y = toYMD(e); if (y) { if (!minY || y < minY) minY = y; if (!maxY || y > maxY) maxY = y } g += dur(e) }
+      if (minY && maxY) rows.push({ type:'total', wkStart:minY, wkEnd:maxY, total:g })
+    }
+    return rows
+  }, [results, showTotals])
+
   return (
     <div style={{ marginTop: 12 }}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -907,37 +962,48 @@ function LogSearchScreen(props: { allEvents: string[], tz?: string, initialState
 
       <div style={{ marginTop: 16 }}>
         <h3 style={{ margin: '16px 0 8px' }}>Results</h3>
+        <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <input id="toggleTotals" type="checkbox" checked={showTotals} onChange={(e)=>{ setShowTotals(e.target.checked); try { localStorage.setItem('show_weekly_totals', e.target.checked ? '1' : '0') } catch {} }} />
+          <label htmlFor="toggleTotals">Show weekly totals</label>
+        </div>
         {loading ? (
           <div>Searching…</div>
         ) : results.length === 0 ? (
           <div>No results</div>
         ) : (
           <div className="logsWide">
-            {results.map((e) => {
-              let dateForDisplay: Date
-              if (e.start_iso) {
-                dateForDisplay = new Date(e.start_iso)
-              } else if (e.start_local_date) {
-                const v = (e as any).start_local_date as string
-                // If server serialized DATE as ISO with time, use it directly; else append a midday time
-                dateForDisplay = new Date(v.includes('T') ? v : `${v}T12:00:00Z`)
+            {displayRows.map((row, idx) => {
+              if (row.type === 'total') {
+                const label = (showTotals && idx === displayRows.length - 1) ? 'GRAND TOTAL' : 'WEEK TOTAL'
+                return (
+                  <div key={`tot-${row.wkStart}-${row.wkEnd}-${idx}`} className="logsRow total" style={{ padding: '8px 0' }}>
+                    <div className="totalCell">{label}: {ymdToMD(row.wkStart)} to {ymdToMD(row.wkEnd)} - {formatDuration(row.total)}</div>
+                  </div>
+                )
               } else {
-                dateForDisplay = new Date()
+                const e = row.entry
+                let dateForDisplay: Date
+                if (e.start_iso) {
+                  dateForDisplay = new Date(e.start_iso)
+                } else if (e.start_local_date) {
+                  const v = (e as any).start_local_date as string
+                  dateForDisplay = new Date(v.includes('T') ? v : `${v}T12:00:00Z`)
+                } else {
+                  dateForDisplay = new Date()
+                }
+                const start = e.start_iso ? new Date(e.start_iso) : null
+                const stop = e.stop_iso ? new Date(e.stop_iso) : null
+                const dur2 = (typeof e.duration_min === 'number') ? e.duration_min : (start && stop ? Math.round((+stop - +start) / 60000) : null)
+                return (
+                  <div key={e.id} className="logsRow" style={{ padding: '8px 0', borderBottom: '1px solid rgba(238,238,238,0.5)' }}>
+                    <div className="cellDay" style={{ color: '#ffb616', cursor: 'pointer' }} onClick={()=>props.onOpenEntry(e)}>{formatDayMonTZ(dateForDisplay, tz)}</div>
+                    <div className="cellNotes" title={e.notes || ''}>{e.notes || ''}</div>
+                    <div className="cellStart">{start ? renderCivil(start, tz) : '—'}</div>
+                    <div className="cellStop">{stop ? renderCivil(stop, tz) : '—'}</div>
+                    <div className="cellTotal" style={{ fontVariantNumeric: 'tabular-nums' as any }}>{formatDuration(dur2 ?? null)}</div>
+                  </div>
+                )
               }
-              const start = e.start_iso ? new Date(e.start_iso) : null
-              const stop = e.stop_iso ? new Date(e.stop_iso) : null
-              const dur = (typeof e.duration_min === 'number')
-                ? e.duration_min
-                : (start && stop ? Math.round((+stop - +start) / 60000) : null)
-              return (
-                <div key={e.id} className="logsRow" style={{ padding: '8px 0', borderBottom: '1px solid rgba(238,238,238,0.5)' }}>
-                  <div className="cellDay" style={{ color: '#ffb616', cursor: 'pointer' }} onClick={()=>props.onOpenEntry(e)}>{formatDayMonTZ(dateForDisplay, tz)}</div>
-                  <div className="cellNotes" title={e.notes || ''}>{e.notes || ''}</div>
-                  <div className="cellStart">{start ? renderCivil(start, tz) : '—'}</div>
-                  <div className="cellStop">{stop ? renderCivil(stop, tz) : '—'}</div>
-                  <div className="cellTotal" style={{ fontVariantNumeric: 'tabular-nums' as any }}>{formatDuration(dur ?? null)}</div>
-                </div>
-              )
             })}
           </div>
         )}
