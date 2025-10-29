@@ -68,6 +68,7 @@ function App() {
   const [entries, setEntries] = useState<Entry[]>([])
   const [activeEntry, setActiveEntry] = useState<Entry | null>(null)
   const [stopping, setStopping] = useState(false)
+  const [totalsEntries, setTotalsEntries] = useState<Entry[]>([])
 
   const now = useClock()
 
@@ -84,6 +85,7 @@ function App() {
       } catch {}
       await refreshEntries()
       setLoading(false)
+      try { await refreshTotals() } catch {}
     })()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -97,6 +99,13 @@ function App() {
     } catch (e: any) {
       // ignore when unauthenticated
     }
+  }
+
+  async function refreshTotals() {
+    try {
+      const { entries } = await api.list(1000)
+      setTotalsEntries(entries)
+    } catch {}
   }
 
   async function onLogin(email: string, password: string) {
@@ -146,6 +155,7 @@ function App() {
       await sound.enable(); sound.playStart()
       await api.start(site, events, notes)
       await refreshEntries()
+      await refreshTotals()
     } catch (e: any) {
       alert(e?.data?.detail || e?.data?.error || 'Start failed')
     }
@@ -159,6 +169,7 @@ function App() {
       setNotes('')
       setEvents([])
       await refreshEntries()
+      await refreshTotals()
     } catch (e: any) {
       alert(e?.data?.error || 'Stop failed')
     } finally {
@@ -168,6 +179,29 @@ function App() {
 
   const tz = user?.tz || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
   // const toTZ = (iso: string) => new Date(iso)
+
+  // Totals for header (YTD/MTD/WTD/Today) when viewing Timed Entry
+  const todayYMD = ymdInTZ(now, tz)
+  const year = todayYMD.slice(0, 4)
+  const month = todayYMD.slice(5, 7)
+  const ytdStart = `${year}-01-01`
+  const mtdStart = `${year}-${month}-01`
+  const wtdStart = weekStartSunday(todayYMD)
+  const totalsAgg = useMemo(() => {
+    let ytd = 0, mtd = 0, wtd = 0, tdy = 0
+    for (const e of totalsEntries) {
+      let ymd = normalizeYMD((e as any).start_local_date, tz)
+      if (!ymd && e.start_iso) ymd = ymdInTZ(new Date(e.start_iso), tz)
+      if (!ymd) continue
+      const mins = timeDurationMinutes(e.start_iso, e.stop_iso, e.duration_min) || 0
+      if (!mins) continue
+      if (ymd >= ytdStart && ymd <= todayYMD) ytd += mins
+      if (ymd >= mtdStart && ymd <= todayYMD) mtd += mins
+      if (ymd >= wtdStart && ymd <= todayYMD) wtd += mins
+      if (ymd === todayYMD) tdy += mins
+    }
+    return { ytd, mtd, wtd, tdy }
+  }, [totalsEntries, tz, todayYMD, ytdStart, mtdStart, wtdStart])
 
   if (loading) return <div style={containerStyle}>Loading…</div>
 
@@ -200,7 +234,7 @@ function App() {
           allEvents={allEvents}
           tz={tz}
           onCancel={() => setView('time')}
-          onCreated={async () => { await refreshEntries(); setView('time') }}
+          onCreated={async () => { await refreshEntries(); await refreshTotals(); setView('time') }}
         />
       ) : view === 'edit' && editing ? (
         <NewEntryScreen
@@ -213,6 +247,7 @@ function App() {
           onCancel={() => { const rv = returnView || 'time'; setEditing(null); setView(rv); setReturnView(null) }}
           onCreated={async () => {
             await refreshEntries()
+            await refreshTotals()
             // If we came from search, refresh that result row in-place
             if (returnView === 'search' && editing?.id) {
               try {
@@ -297,7 +332,12 @@ function App() {
             </button>
           </div>
 
-          <h3 style={{ margin: '16px 0 8px' }}>Recent</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 6, alignItems: 'baseline', margin: '16px 0 8px', opacity: 0.5 }}>
+            <div style={{ textAlign: 'left', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Y: {formatDuration(totalsAgg.ytd)}</div>
+            <div style={{ textAlign: 'center', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>M: {formatDuration(totalsAgg.mtd)}</div>
+            <div style={{ textAlign: 'center', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>W: {formatDuration(totalsAgg.wtd)}</div>
+            <div style={{ textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatDuration(totalsAgg.tdy)}</div>
+          </div>
           <div className="logsWide">
             {entries.map((e) => {
               const dateForDisplay = timeDateForDisplay(e.start_iso, (e as any).start_local_date)
