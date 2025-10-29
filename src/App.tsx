@@ -379,16 +379,16 @@ function Header(props: { user: User | null, view: 'time'|'settings'|'login'|'reg
             {!props.user ? (
               <>
                 <button
-                  onClick={()=>{ props.onNavigate('login'); setOpen(false) }}
-                  className="btn-glass"
-                  style={{ ...btnStyle, color: '#fff', width: '100%', ['--btn-color' as any]: '#1976d2' }}
+                  onClick={async()=>{ await sound.enable(); sound.playNew(); props.onNavigate('login'); setOpen(false) }}
+                  className="btn3d btn-glass"
+                  style={{ ...btnStyle, color: '#fff', width: '100%', ['--btn-color' as any]: '#0d47a1' }}
                 >
                   Login
                 </button>
                 <button
-                  onClick={()=>{ props.onNavigate('register'); setOpen(false) }}
-                  className="btn-glass"
-                  style={{ ...btnStyle, color: '#fff', width: '100%', ['--btn-color' as any]: '#455a64' }}
+                  onClick={async()=>{ await sound.enable(); sound.playNew(); props.onNavigate('register'); setOpen(false) }}
+                  className="btn3d btn-glass"
+                  style={{ ...btnStyle, color: '#fff', width: '100%', ['--btn-color' as any]: '#0d47a1' }}
                 >
                   Register
                 </button>
@@ -396,37 +396,37 @@ function Header(props: { user: User | null, view: 'time'|'settings'|'login'|'reg
             ) : (
               <>
                 <button
-                  onClick={()=>{ props.onNavigate('time'); setOpen(false) }}
-                  className="btn-glass"
-                  style={{ ...btnStyle, color: '#fff', width: '100%', textAlign: 'left', ['--btn-color' as any]: '#ffb616' }}
+                  onClick={async()=>{ await sound.enable(); sound.playNew(); props.onNavigate('time'); setOpen(false) }}
+                  className="btn3d btn-glass"
+                  style={{ ...btnStyle, color: '#fff', width: '100%', textAlign: 'left', ['--btn-color' as any]: '#0d47a1' }}
                 >
                   Timed Entry
                 </button>
                 <button
-                  onClick={()=>{ props.onNavigate('new'); setOpen(false) }}
-                  className="btn-glass"
-                  style={{ ...btnStyle, color: '#fff', width: '100%', textAlign: 'left', ['--btn-color' as any]: '#ffb616' }}
+                  onClick={async()=>{ await sound.enable(); sound.playNew(); props.onNavigate('new'); setOpen(false) }}
+                  className="btn3d btn-glass"
+                  style={{ ...btnStyle, color: '#fff', width: '100%', textAlign: 'left', ['--btn-color' as any]: '#0d47a1' }}
                 >
                   Manual Entry
                 </button>
                 <button
-                  onClick={()=>{ props.onNavigate('search'); setOpen(false) }}
-                  className="btn-glass"
-                  style={{ ...btnStyle, color: '#fff', width: '100%', textAlign: 'left', ['--btn-color' as any]: '#ffb616' }}
+                  onClick={async()=>{ await sound.enable(); sound.playNew(); props.onNavigate('search'); setOpen(false) }}
+                  className="btn3d btn-glass"
+                  style={{ ...btnStyle, color: '#fff', width: '100%', textAlign: 'left', ['--btn-color' as any]: '#0d47a1' }}
                 >
                   Log Search
                 </button>
                 <button
-                  onClick={()=>{ props.onNavigate('settings'); setOpen(false) }}
-                  className="btn-glass"
-                  style={{ ...btnStyle, color: '#fff', width: '100%', textAlign: 'left', ['--btn-color' as any]: '#ffb616' }}
+                  onClick={async()=>{ await sound.enable(); sound.playNew(); props.onNavigate('settings'); setOpen(false) }}
+                  className="btn3d btn-glass"
+                  style={{ ...btnStyle, color: '#fff', width: '100%', textAlign: 'left', ['--btn-color' as any]: '#0d47a1' }}
                 >
                   User Settings
                 </button>
                 <div style={{ flex: 1 }} />
                 <button
-                  onClick={()=>{ props.onLogout(); setOpen(false) }}
-                  className="btn-glass"
+                  onClick={async()=>{ await sound.enable(); sound.playStop(); props.onLogout(); setOpen(false) }}
+                  className="btn3d btn-glass"
                   style={{ ...btnStyle, color: '#fff', width: '100%', textAlign: 'left', ['--btn-color' as any]: '#d32f2f' }}
                 >
                   Logout
@@ -516,7 +516,7 @@ function SettingsScreen(props: { user: User, onSave: (tz:string)=>Promise<void> 
       </div>
       <button
         disabled={saving}
-        onClick={async()=>{ setSaving(true); try { await props.onSave(tz) } finally { setSaving(false) } }}
+        onClick={async()=>{ setSaving(true); try { await sound.enable(); sound.playStart(); await props.onSave(tz) } finally { setSaving(false) } }}
         className="btn3d btn-glass"
         style={{ ...btnStyle, color: '#fff', width: '100%', ['--btn-color' as any]: '#2e7d32' }}
       >
@@ -897,7 +897,13 @@ function LogSearchScreen(props: { allEvents: string[], tz?: string, initialState
         </div>
       </div>
 
-      <button onClick={onSearch} className="btn3d btn-glass" style={{ ...btnStyle, color: '#fff', width: '100%', ['--btn-color' as any]: '#1976d2' }}>Search</button>
+      <button
+        onClick={async()=>{ await sound.enable(); sound.playNew(); await onSearch() }}
+        className="btn3d btn-glass"
+        style={{ ...btnStyle, color: '#fff', width: '100%', ['--btn-color' as any]: '#1976d2' }}
+      >
+        Search
+      </button>
 
       <div style={{ marginTop: 16 }}>
         <h3 style={{ margin: '16px 0 8px' }}>Results</h3>
