@@ -912,7 +912,7 @@ function LogSearchScreen(props: { allEvents: string[], tz?: string, initialState
         ) : results.length === 0 ? (
           <div>No results</div>
         ) : (
-          <div>
+          <div className="logsWide">
             {results.map((e) => {
               let dateForDisplay: Date
               if (e.start_iso) {
