@@ -304,8 +304,9 @@ function App() {
                 dateForDisplay = new Date(e.start_iso)
               } else if (e.start_local_date) {
                 const v = (e as any).start_local_date as string
-                // If server serialized DATE as ISO with time, use it directly; else append a midday time
-                dateForDisplay = new Date(v.includes('T') ? v : `${v}T12:00:00Z`)
+                // Always treat DATE as YMD; use midday UTC to avoid tz rollbacks
+                const ymd = v.includes('T') ? v.slice(0, 10) : v
+                dateForDisplay = new Date(`${ymd}T12:00:00Z`)
               } else {
                 dateForDisplay = new Date()
               }
@@ -1033,7 +1034,8 @@ function LogSearchScreen(props: { allEvents: string[], tz?: string, initialState
                   dateForDisplay = new Date(e.start_iso)
                 } else if (e.start_local_date) {
                   const v = (e as any).start_local_date as string
-                  dateForDisplay = new Date(v.includes('T') ? v : `${v}T12:00:00Z`)
+                  const ymd = v.includes('T') ? v.slice(0, 10) : v
+                  dateForDisplay = new Date(`${ymd}T12:00:00Z`)
                 } else {
                   dateForDisplay = new Date()
                 }

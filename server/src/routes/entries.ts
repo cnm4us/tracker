@@ -171,6 +171,14 @@ entriesRouter.patch('/:id', requireAuth, async (req: AuthedRequest, res: Respons
       else if (!isNaN(h) || !isNaN(m)) dur = (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m)
       else if (start && stop) dur = Math.max(0, Math.floor((+stop - +start) / 60000))
 
+      // If a duration was supplied and start/stop were not explicitly provided,
+      // convert this entry to duration-only by clearing start/stop.
+      const durationSupplied = (!isNaN(dm)) || (!isNaN(h)) || (!isNaN(m))
+      if (durationSupplied && start_utc === undefined && stop_utc === undefined) {
+        start = null
+        stop = null
+      }
+
       const newSite = site && ['clinic', 'remote'].includes(site) ? site : existing.site
       const userTz2 = (req.user?.tz || String(req.headers['x-user-tz']) || 'UTC') as string
       const newLocalDate = start_local_date || (start ? ymdInTZ(start, userTz2) : existing.start_local_date)
