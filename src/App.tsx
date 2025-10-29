@@ -332,13 +332,13 @@ function App() {
             </button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 6, alignItems: 'baseline', margin: '16px 0 8px', opacity: 0.5 }}>
-            <div style={{ textAlign: 'left', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Y: {formatDuration(totalsAgg.ytd)}</div>
-            <div style={{ textAlign: 'center', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>M: {formatDuration(totalsAgg.mtd)}</div>
-            <div style={{ textAlign: 'center', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>W: {formatDuration(totalsAgg.wtd)}</div>
-            <div style={{ textAlign: 'right', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatDuration(totalsAgg.tdy)}</div>
-          </div>
           <div className="logsWide">
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, opacity: 0.25, margin: '16px 0 8px' }}>
+              <div style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>Y: {formatDuration(totalsAgg.ytd)}</div>
+              <div style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>M: {formatDuration(totalsAgg.mtd)}</div>
+              <div style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>W: {formatDuration(totalsAgg.wtd)}</div>
+              <div style={{ marginLeft: 'auto', fontWeight: 600, whiteSpace: 'nowrap' }}>{formatDuration(totalsAgg.tdy)}</div>
+            </div>
             {entries.map((e) => {
               const dateForDisplay = timeDateForDisplay(e.start_iso, (e as any).start_local_date)
               const start = e.start_iso ? new Date(e.start_iso) : null
