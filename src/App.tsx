@@ -768,16 +768,33 @@ function NewEntryScreen(props: { mode?: 'new'|'edit', entry?: Entry, defaultSite
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 8 }}>
         <span
           onClick={()=>setEditMode('times')}
-          style={{ cursor: 'pointer', fontWeight: editMode==='times'?700:500, color: editMode==='times'? '#ffb616':'#fff', textDecoration: editMode==='times'?'underline':'none' }}
+          style={{
+            cursor: 'pointer',
+            fontWeight: 400,
+            color: '#fff',
+            background: editMode==='times' ? '#000' : 'transparent',
+            border: editMode==='times' ? '1px solid #fff' : '1px solid rgba(255,255,255,0.35)',
+            borderRadius: 8,
+            padding: '6px 17px',
+            display: 'inline-block',
+          }}
         >
-          Timed Entry
+          Start/Stop Time
         </span>
-        <span style={{ opacity: 0.5 }}>|</span>
         <span
           onClick={()=>setEditMode('duration')}
-          style={{ cursor: 'pointer', fontWeight: editMode==='duration'?700:500, color: editMode==='duration'? '#ffb616':'#fff', textDecoration: editMode==='duration'?'underline':'none' }}
+          style={{
+            cursor: 'pointer',
+            fontWeight: 400,
+            color: '#fff',
+            background: editMode==='duration' ? '#000' : 'transparent',
+            border: editMode==='duration' ? '1px solid #fff' : '1px solid rgba(255,255,255,0.35)',
+            borderRadius: 8,
+            padding: '6px 17px',
+            display: 'inline-block',
+          }}
         >
-          Manual Entry
+          Total Time
         </span>
       </div>
 
