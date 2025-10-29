@@ -9,7 +9,12 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "server:dev": "tsx watch server/src/index.ts",
-    "db:migrate": "tsx server/migrations/001_init.ts"
+    "db:migrate": "tsx server/migrations/001_init.ts",
+    "db:seed": "tsx server/scripts/seed.ts",
+    "db:seed:wipe": "tsx server/scripts/wipe_seed.ts",
+    "db:nuke:entries": "tsx server/scripts/nuke_entries.ts",
+    "db:backup:schema": "tsx server/scripts/backup_db.ts --schema",
+    "db:backup:full": "tsx server/scripts/backup_db.ts --full"
   },
   "dependencies": {
     "react": "^19.1.1",

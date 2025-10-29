@@ -1,0 +1,80 @@
+# Notes seed list for Nurse Practitioner overtime reasons.
+# One note per line. Lines starting with # are comments and ignored.
+# Keep entries concise; the seeder appends a batch tag automatically.
+
+Chart catch-up
+Charting backlog after clinic
+Closed charts and reviewed documentation
+Inbox triage and patient messages
+Email triage
+Patient portal messages
+Phone call returns
+Care coordination (CM/SW)
+Discharge follow-up outreach
+Post-ED follow-up scheduling
+Referrals – urgent cardiology
+Referrals – urgent endocrinology
+Referrals – neurology consults
+Referrals – dermatology
+Referrals – pulmonology
+Referrals – ophthalmology
+Referrals – gastroenterology
+Referrals – urology
+Referrals – nephrology
+Referrals – orthopedics
+Referrals – behavioral health
+Reviewed abnormal labs and scheduled urgent follow-up.
+Critical lab result callback and counseling.
+Imaging results review and patient counseling.
+Medication reconciliation and refill updates.
+Prior authorization (PA) for medications.
+RX PA approvals and denials follow-up.
+Pharmacy clarification calls.
+Formulary alternatives and substitutions.
+Disability/FMLA paperwork.
+School/camp forms and immunization forms.
+Work notes and restrictions.
+Home health orders (HH)
+DME orders and vendor coordination
+Wound care supplies and instructions
+Vaccination registry reconciliation
+Vaccine inventory and documentation
+Quality metrics and registries
+HCC/Risk adjustment coding review
+Problem list cleanup and coding
+Scribe corrections and addenda
+Template updates and smartphrases
+EHR downtime recovery
+No‑show outreach and rescheduling
+Recall list management
+On‑call handoff review
+Telehealth overflow
+Urgent walk‑in overflow
+ACP documentation and counseling
+Pre‑op clearances and forms
+Post‑op checks and instructions
+Prenatal referrals and coordination
+Pediatric referrals and coordination
+Anticoagulation management
+Diabetes education and follow‑up planning
+Hypertension follow‑ups and monitoring
+Asthma action plan updates
+Infection follow‑up and recheck planning
+STI results and treatment counseling
+COVID/flu result callbacks
+Specimen tracking and lab redraws
+Imaging orders and prior auths
+Consult note reviews and communication
+Team huddle follow‑ups
+Provider messaging and coordination
+Insurance verifications (benefits/coverage)
+Panel management tasks
+Population health outreach
+Scheduling urgent follow‑ups
+Advance directives/Code status discussion
+Care plan updates and education
+ED utilization review and outreach
+Behavioral health coordination
+Social determinants resources and referrals
+Transportation coordination for appointments
+Language access/Interpreter coordination
