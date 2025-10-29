@@ -3,7 +3,7 @@ import './App.css'
 import { api, formatCivilPartsTZ, formatDayMonTZ, formatDuration, ymdInTZ } from './api'
 import type { Entry, User } from './api'
 import sound from './sound'
-import { dateForDisplay as timeDateForDisplay, durationMinutes as timeDurationMinutes, weekStartSunday, weekEndSaturday, formatMMDD, normalizeYMD, localDateTimeToUTCISO } from './time'
+import { dateForDisplay as timeDateForDisplay, durationMinutes as timeDurationMinutes, weekStartSunday, weekEndSaturday, formatMMDD, normalizeYMD, localDateTimeToUTCISO, addDaysYMD } from './time'
 
 type Site = 'clinic' | 'remote'
 
@@ -842,10 +842,13 @@ function LogSearchScreen(props: { allEvents: string[], tz?: string, initialState
   }
 
   function withinRange(e: Entry): boolean {
-    const ymd = e.start_local_date || toYMDInTZ(e.start_iso) || ''
+    const ymd = normalizeYMD(e.start_local_date, tz) || toYMDInTZ(e.start_iso) || ''
     if (!ymd) return false
     if (begin && ymd < begin) return false
-    if (end && ymd > end) return false
+    if (end) {
+      const endNext = addDaysYMD(end, 1)
+      if (ymd >= endNext) return false
+    }
     return true
   }
 

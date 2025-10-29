@@ -58,6 +58,16 @@ export function formatMMDD(ymd: string): string {
   return `${m}/${d}`
 }
 
+export function addDaysYMD(ymd: string, days: number = 1): string {
+  const s = ymd && ymd.length >= 10 ? ymd.slice(0, 10) : ymd
+  const dt = new Date(s + 'T00:00:00Z')
+  dt.setUTCDate(dt.getUTCDate() + days)
+  const y = dt.getUTCFullYear()
+  const m = String(dt.getUTCMonth() + 1).padStart(2, '0')
+  const d = String(dt.getUTCDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 // pad2 reserved for future use
 
 function buildIsoLikeFromParts(parts: Intl.DateTimeFormatPart[]): string {
