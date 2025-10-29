@@ -3,6 +3,7 @@ import './App.css'
 import { api, formatCivilPartsTZ, formatDayMonTZ, formatDuration, ymdInTZ } from './api'
 import type { Entry, User } from './api'
 import sound from './sound'
+import { dateForDisplay as timeDateForDisplay, durationMinutes as timeDurationMinutes, weekStartSunday, weekEndSaturday, formatMMDD, normalizeYMD, localDateTimeToUTCISO } from './time'
 
 type Site = 'clinic' | 'remote'
 
@@ -299,23 +300,11 @@ function App() {
           <h3 style={{ margin: '16px 0 8px' }}>Recent</h3>
           <div className="logsWide">
             {entries.map((e) => {
-              let dateForDisplay: Date
-              if (e.start_iso) {
-                dateForDisplay = new Date(e.start_iso)
-              } else if (e.start_local_date) {
-                const v = (e as any).start_local_date as string
-                // Always treat DATE as YMD; use midday UTC to avoid tz rollbacks
-                const ymd = v.includes('T') ? v.slice(0, 10) : v
-                dateForDisplay = new Date(`${ymd}T12:00:00Z`)
-              } else {
-                dateForDisplay = new Date()
-              }
+              const dateForDisplay = timeDateForDisplay(e.start_iso, (e as any).start_local_date)
               const start = e.start_iso ? new Date(e.start_iso) : null
               const stop = e.stop_iso ? new Date(e.stop_iso) : null
               const isActiveRow = !!(start && !stop)
-              const dur = (typeof e.duration_min === 'number')
-                ? e.duration_min
-                : (start && stop ? Math.round((+stop - +start) / 60000) : null)
+              const dur = timeDurationMinutes(e.start_iso, e.stop_iso, e.duration_min)
               return (
                 <div key={e.id} className="logsRow" style={{ padding: '8px 0', borderBottom: '1px solid rgba(238,238,238,0.5)' }}>
                   <div className="cellDay" style={{ cursor: 'pointer', textDecoration: 'none', color: '#ffb616' }} onClick={()=>{ setReturnView('time'); setEditing(e); setView('edit') }}>{formatDayMonTZ(dateForDisplay, tz)}</div>
@@ -614,8 +603,8 @@ function NewEntryScreen(props: { mode?: 'new'|'edit', entry?: Entry, defaultSite
 
   function toIso(date: string, time: string): string | null {
     if (!date || !time) return null
-    // Interpret date+time as in user's local timezone, then convert to UTC ISO
-    return new Date(`${date}T${time}:00`).toISOString()
+    // Centralized conversion; currently device tz based
+    return localDateTimeToUTCISO(date, time, tz)
   }
 
   // Derive stop time when in duration mode and start/duration provided; assume stop date = start date
@@ -909,47 +898,24 @@ function LogSearchScreen(props: { allEvents: string[], tz?: string, initialState
     props.onStateChange?.({ begin, end, site, events, results })
   }, [begin, end, site, events])
 
-  function ymdToMD(ymd: string): string { const parts = ymd.split('-'); const m = parts[1]; const d = parts[2]; return `${m}/${d}` }
-  function normalizeYMD(val?: string | null): string {
-    if (!val) return ''
-    const s = String(val)
-    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
-    if (s.includes('T')) return s.slice(0, 10)
-    // Fallback: try to parse as Date and return YMD in local tz
-    const d = new Date(s)
-    if (!isNaN(d.getTime())) {
-      const y = new Intl.DateTimeFormat('en-US', { year: 'numeric', timeZone: tz }).format(d)
-      const m = new Intl.DateTimeFormat('en-US', { month: '2-digit', timeZone: tz }).format(d)
-      const day = new Intl.DateTimeFormat('en-US', { day: '2-digit', timeZone: tz }).format(d)
-      return `${y}-${m}-${day}`
-    }
-    return ''
-  }
-  function weekStartYMD(ymd: string): string {
-    const dt = new Date(ymd + 'T00:00:00Z')
-    const wd = dt.getUTCDay() // 0=Sun
-    const start = new Date(dt); start.setUTCDate(start.getUTCDate() - wd)
-    const y = start.getUTCFullYear(); const m = String(start.getUTCMonth()+1).padStart(2,'0'); const d = String(start.getUTCDate()).padStart(2,'0')
-    return `${y}-${m}-${d}`
-  }
+  
   const displayRows = useMemo(() => {
     const rows: Array<{ type:'total'; wkStart:string; wkEnd:string; total:number } | { type:'entry'; entry: Entry }> = []
     if (!results.length) return rows
-    const toYMD = (e: Entry) => normalizeYMD(e.start_local_date) || toYMDInTZ(e.start_iso) || ''
-    const dur = (e: Entry) => (typeof e.duration_min === 'number') ? e.duration_min : (e.start_iso && e.stop_iso ? Math.max(0, Math.round((+new Date(e.stop_iso) - +new Date(e.start_iso))/60000)) : 0)
+    const toYMD = (e: Entry) => normalizeYMD(e.start_local_date, tz) || toYMDInTZ(e.start_iso) || ''
+    const dur = (e: Entry) => timeDurationMinutes(e.start_iso, e.stop_iso, e.duration_min) || 0
     const totals = new Map<string, { total:number; start:string; end:string }>()
     for (const e of results) {
       const ymd = toYMD(e); if (!ymd) continue
-      const ws = weekStartYMD(ymd)
-      const endDt = new Date(ws + 'T00:00:00Z'); endDt.setUTCDate(endDt.getUTCDate()+6)
-      const we = `${endDt.getUTCFullYear()}-${String(endDt.getUTCMonth()+1).padStart(2,'0')}-${String(endDt.getUTCDate()).padStart(2,'0')}`
+      const ws = weekStartSunday(ymd)
+      const we = weekEndSaturday(ws)
       const cur = totals.get(ws) || { total: 0, start: ws, end: we }
       cur.total += dur(e)
       totals.set(ws, cur)
     }
     const seen = new Set<string>()
     for (const e of results) {
-      const ymd = toYMD(e); const ws = ymd ? weekStartYMD(ymd) : ''
+      const ymd = toYMD(e); const ws = ymd ? weekStartSunday(ymd) : ''
       if (showTotals && ws && !seen.has(ws)) { const t = totals.get(ws)!; rows.push({ type:'total', wkStart:t.start, wkEnd:t.end, total:t.total }); seen.add(ws) }
       rows.push({ type:'entry', entry: e })
     }
@@ -1021,7 +987,7 @@ function LogSearchScreen(props: { allEvents: string[], tz?: string, initialState
                     <div className="totalCell">
                       <div className="totalInner">
                         <div className="totalLeft">{label}</div>
-                        <div className="totalCenter">{ymdToMD(row.wkStart)} - {ymdToMD(row.wkEnd)}</div>
+                        <div className="totalCenter">{formatMMDD(row.wkStart)} - {formatMMDD(row.wkEnd)}</div>
                         <div className="totalRight">{formatDuration(row.total)}</div>
                       </div>
                     </div>
@@ -1029,19 +995,10 @@ function LogSearchScreen(props: { allEvents: string[], tz?: string, initialState
                 )
               } else {
                 const e = row.entry
-                let dateForDisplay: Date
-                if (e.start_iso) {
-                  dateForDisplay = new Date(e.start_iso)
-                } else if (e.start_local_date) {
-                  const v = (e as any).start_local_date as string
-                  const ymd = v.includes('T') ? v.slice(0, 10) : v
-                  dateForDisplay = new Date(`${ymd}T12:00:00Z`)
-                } else {
-                  dateForDisplay = new Date()
-                }
+                const dateForDisplay = timeDateForDisplay(e.start_iso, (e as any).start_local_date)
                 const start = e.start_iso ? new Date(e.start_iso) : null
                 const stop = e.stop_iso ? new Date(e.stop_iso) : null
-                const dur2 = (typeof e.duration_min === 'number') ? e.duration_min : (start && stop ? Math.round((+stop - +start) / 60000) : null)
+                const dur2 = timeDurationMinutes(e.start_iso, e.stop_iso, e.duration_min)
                 return (
                   <div key={e.id} className="logsRow" style={{ padding: '8px 0', borderBottom: '1px solid rgba(238,238,238,0.5)' }}>
                     <div className="cellDay" style={{ color: '#ffb616', cursor: 'pointer' }} onClick={()=>props.onOpenEntry(e)}>{formatDayMonTZ(dateForDisplay, tz)}</div>
