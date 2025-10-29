@@ -974,10 +974,17 @@ function LogSearchScreen(props: { allEvents: string[], tz?: string, initialState
           <div className="logsWide">
             {displayRows.map((row, idx) => {
               if (row.type === 'total') {
-                const label = (showTotals && idx === displayRows.length - 1) ? 'GRAND TOTAL' : 'WEEK TOTAL'
+                const isGrand = (showTotals && idx === displayRows.length - 1)
+                const label = isGrand ? 'GRAND TOTAL' : 'WEEK TOTAL'
                 return (
                   <div key={`tot-${row.wkStart}-${row.wkEnd}-${idx}`} className="logsRow total" style={{ padding: '8px 0' }}>
-                    <div className="totalCell">{label}: {ymdToMD(row.wkStart)} to {ymdToMD(row.wkEnd)} - {formatDuration(row.total)}</div>
+                    <div className="totalCell">
+                      <div className="totalInner">
+                        <div className="totalLeft">{label}</div>
+                        <div className="totalCenter">{ymdToMD(row.wkStart)} - {ymdToMD(row.wkEnd)}</div>
+                        <div className="totalRight">{formatDuration(row.total)}</div>
+                      </div>
+                    </div>
                   </div>
                 )
               } else {

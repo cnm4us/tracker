@@ -201,6 +201,15 @@ h1 {
   border-radius: 6px;
 }
 
+.totalInner {
+  display: grid;
+  grid-template-columns: auto 1fr 6ch; /* label | date range | total aligned with logs total col */
+  align-items: center;
+  gap: 8px;
+}
+.totalInner .totalCenter { text-align: center; }
+.totalInner .totalRight { text-align: right; font-variant-numeric: tabular-nums; }
+
 h1 {
   font-size: 3.2em;
   line-height: 1.1;
