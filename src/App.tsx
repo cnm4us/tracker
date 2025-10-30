@@ -92,7 +92,7 @@ function App() {
 
   async function refreshEntries() {
     try {
-      const { entries } = await api.list(20)
+      const { entries } = await api.list(1000)
       setEntries(entries)
       const active = entries.find(e => e.start_iso && !e.stop_iso)
       setActiveEntry(active || null)
@@ -203,6 +203,78 @@ function App() {
     return { ytd, mtd, wtd, tdy }
   }, [totalsEntries, tz, todayYMD, ytdStart, mtdStart, wtdStart])
 
+  // Filter recent logs for Timed Entry per user setting
+  const filteredEntriesTimed = useMemo(() => {
+    const tzLocal = tz
+    const scope = (user?.recent_logs_scope || 'wtd_prev') as 'wtd'|'wtd_prev'|'mtd'|'mtd_prev'
+    const weekStart = (ymd: string) => weekStartSunday(ymd)
+    const weekEnd = (ymd: string) => weekEndSaturday(ymd)
+    const firstOfMonth = (ymd: string) => ymd.slice(0,8) + '01'
+    const prevMonthFirst = (ymd: string): string => {
+      const y = parseInt(ymd.slice(0,4),10)
+      const m = parseInt(ymd.slice(5,7),10)
+      const d = new Date(Date.UTC(y, m-1, 1))
+      d.setUTCMonth(d.getUTCMonth()-1)
+      const yy = d.getUTCFullYear()
+      const mm = String(d.getUTCMonth()+1).padStart(2,'0')
+      return `${yy}-${mm}-01`
+    }
+    const begin = scope === 'wtd' ? weekStart(todayYMD)
+      : scope === 'wtd_prev' ? addDaysYMD(weekStart(todayYMD), -7)
+      : scope === 'mtd' ? firstOfMonth(todayYMD)
+      : /* mtd_prev */ prevMonthFirst(todayYMD)
+    const end = scope.startsWith('wtd') ? weekEnd(todayYMD) : todayYMD
+    const toYMD = (ent: Entry) => normalizeYMD((ent as any).start_local_date, tzLocal) || (ent.start_iso ? ymdInTZ(new Date(ent.start_iso), tzLocal) : '')
+    const isActive = (ent: Entry) => !!(ent.start_iso && !ent.stop_iso)
+    const list = entries.filter((ent) => {
+      const ymd = toYMD(ent)
+      if (!ymd) return false
+      if (isActive(ent)) return true
+      if (ymd > todayYMD) return true // include future-dated entries
+      return (ymd >= begin && ymd <= end)
+    })
+    return list
+  }, [entries, user?.recent_logs_scope, tz, todayYMD])
+
+  const hasMultipleWeeksTimed = useMemo(() => {
+    const tzLocal = tz
+    const toYMD = (ent: Entry) => normalizeYMD((ent as any).start_local_date, tzLocal) || (ent.start_iso ? ymdInTZ(new Date(ent.start_iso), tzLocal) : '')
+    const set = new Set<string>()
+    for (const ent of filteredEntriesTimed) { const y = toYMD(ent); if (y) set.add(weekStartSunday(y)) }
+    return set.size > 1
+  }, [filteredEntriesTimed, tz])
+
+  let prevWeekForRender: string | null = null
+
+  // Sort within the filtered set to ensure:
+  // - Primary key: local date desc
+  // - Then timed entries before manual entries for same date
+  // - Timed: start time desc
+  // - Manual: duration desc, then created_at desc
+  const sortedEntriesTimed = useMemo(() => {
+    const tzLocal = tz
+    const ymdOf = (e: Entry) => normalizeYMD((e as any).start_local_date, tzLocal) || (e.start_iso ? ymdInTZ(new Date(e.start_iso), tzLocal) : '')
+    return [...filteredEntriesTimed].sort((a, b) => {
+      const ya = ymdOf(a)
+      const yb = ymdOf(b)
+      if (ya !== yb) return ya > yb ? -1 : 1
+      const timedA = !!a.start_iso
+      const timedB = !!b.start_iso
+      if (timedA !== timedB) return timedA ? -1 : 1
+      if (timedA && timedB) {
+        const ta = a.start_iso ? Date.parse(a.start_iso) : 0
+        const tb = b.start_iso ? Date.parse(b.start_iso) : 0
+        return tb - ta
+      }
+      const da = (a.duration_min ?? 0)
+      const db = (b.duration_min ?? 0)
+      if (da !== db) return db - da
+      const ca = (a as any).created_at ? Date.parse((a as any).created_at as any) : 0
+      const cb = (b as any).created_at ? Date.parse((b as any).created_at as any) : 0
+      return cb - ca
+    })
+  }, [filteredEntriesTimed, tz])
+
   const isAuthView = !user && (view === 'login' || view === 'register')
 
   // Global scroll policy: always start at top on view change,
@@ -233,7 +305,11 @@ function App() {
       ) : view === 'settings' ? (
         <SettingsScreen
           user={user}
-          onSave={async (tz) => { await api.updateMe(tz); setUser(u => (u ? { ...u, tz } : u)); setView('time') }}
+          onSave={async (tz, scope) => {
+            await api.updateMe({ tz, recent_logs_scope: scope })
+            setUser(u => (u ? { ...u, tz, recent_logs_scope: scope } as any : u))
+            setView('time')
+          }}
         />
       ) : view === 'new' ? (
         <NewEntryScreen
@@ -348,14 +424,18 @@ function App() {
               <div style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>W: {formatDuration(totalsAgg.wtd)}</div>
               <div style={{ marginLeft: 'auto', fontWeight: 600, whiteSpace: 'nowrap' }}>{formatDuration(totalsAgg.tdy)}</div>
             </div>
-            {entries.map((e) => {
-              const dateForDisplay = timeDateForDisplay(e.start_iso, (e as any).start_local_date)
-              const start = e.start_iso ? new Date(e.start_iso) : null
-              const stop = e.stop_iso ? new Date(e.stop_iso) : null
-              const isActiveRow = !!(start && !stop)
-              const dur = timeDurationMinutes(e.start_iso, e.stop_iso, e.duration_min)
-              return (
-                <div key={e.id} className="logsRow" style={{ padding: '8px 0', borderBottom: '1px solid rgba(238,238,238,0.5)' }}>
+            {sortedEntriesTimed.map((e) => {
+                const dateForDisplay = timeDateForDisplay(e.start_iso, (e as any).start_local_date)
+                const start = e.start_iso ? new Date(e.start_iso) : null
+                const stop = e.stop_iso ? new Date(e.stop_iso) : null
+                const isActiveRow = !!(start && !stop)
+                const dur = timeDurationMinutes(e.start_iso, e.stop_iso, e.duration_min)
+                const ymd = normalizeYMD((e as any).start_local_date, tz) || (e.start_iso ? ymdInTZ(new Date(e.start_iso), tz) : '') || ''
+                const ws = ymd ? weekStartSunday(ymd) : ''
+                const strongTop = hasMultipleWeeksTimed && prevWeekForRender && ws && ws !== prevWeekForRender
+                prevWeekForRender = ws || prevWeekForRender
+                return (
+                <div key={e.id} className="logsRow" style={{ padding: '8px 0', borderBottom: '1px solid rgba(238,238,238,0.5)', borderTop: strongTop ? '1px solid rgba(238,238,238,1)' : undefined }}>
                   <div className="cellDay" style={{ cursor: 'pointer', textDecoration: 'none', color: '#ffb616' }} onClick={()=>{ setReturnView('time'); setEditing(e); setView('edit') }}>{formatDayMonTZ(dateForDisplay, tz)}</div>
                   <div className="cellNotes" title={e.notes || ''}>{e.notes || ''}</div>
                   <div className={`cellStart ${isActiveRow ? 'pulse' : ''}`}>{start ? renderCivil(start, tz) : '—'}</div>
@@ -523,8 +603,9 @@ function RegisterScreen(props: { error: string | null, onRegister: (e:string,p:s
   )
 }
 
-function SettingsScreen(props: { user: User, onSave: (tz:string)=>Promise<void> }) {
+function SettingsScreen(props: { user: User, onSave: (tz:string, scope: 'wtd'|'wtd_prev'|'mtd'|'mtd_prev')=>Promise<void> }) {
   const [tz, setTz] = useState<string>(props.user.tz || Intl.DateTimeFormat().resolvedOptions().timeZone)
+  const [recentScope, setRecentScope] = useState<'wtd'|'wtd_prev'|'mtd'|'mtd_prev'>(props.user.recent_logs_scope || 'wtd_prev')
   const tzList = (Intl as any).supportedValuesOf ? (Intl as any).supportedValuesOf('timeZone') as string[] : [tz]
   const [saving, setSaving] = useState(false)
   const [sounds, setSounds] = useState<boolean>(() => sound.isEnabled())
@@ -553,9 +634,19 @@ function SettingsScreen(props: { user: User, onSave: (tz:string)=>Promise<void> 
         <input className="brand" id="sounds" type="checkbox" checked={sounds} onChange={(e)=>{ setSounds(e.target.checked); sound.setEnabled(e.target.checked) }} />
         <label htmlFor="sounds">Button Sounds</label>
       </div>
+
+      <div style={{ margin: '12px 0' }}>
+        <div style={{ fontWeight: 600, marginBottom: 6 }}>Recent Logs</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 6 }}>
+          <label><input type="radio" name="recent_scope" checked={recentScope==='wtd'} onChange={()=>setRecentScope('wtd')} /> WTD: Current Week Only</label>
+          <label><input type="radio" name="recent_scope" checked={recentScope==='wtd_prev'} onChange={()=>setRecentScope('wtd_prev')} /> WTD and Previous Week</label>
+          <label><input type="radio" name="recent_scope" checked={recentScope==='mtd'} onChange={()=>setRecentScope('mtd')} /> MTD: Current Month Only</label>
+          <label><input type="radio" name="recent_scope" checked={recentScope==='mtd_prev'} onChange={()=>setRecentScope('mtd_prev')} /> MTD and Previous Month</label>
+        </div>
+      </div>
       <button
         disabled={saving}
-        onClick={async()=>{ setSaving(true); try { await sound.enable(); sound.playStart(); await props.onSave(tz) } finally { setSaving(false) } }}
+        onClick={async()=>{ setSaving(true); try { await sound.enable(); sound.playStart(); await props.onSave(tz, recentScope) } finally { setSaving(false) } }}
         className="btn3d btn-glass"
         style={{ ...btnStyle, color: '#fff', width: '100%', ['--btn-color' as any]: '#2e7d32' }}
       >

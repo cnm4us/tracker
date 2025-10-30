@@ -1,4 +1,4 @@
-export type User = { id: number; email: string; tz: string; role: 'user'|'admin' }
+export type User = { id: number; email: string; tz: string; role: 'user'|'admin'; recent_logs_scope?: 'wtd'|'wtd_prev'|'mtd'|'mtd_prev' }
 export type Entry = {
   id: number
   user_id: number
@@ -39,7 +39,8 @@ export const api = {
   login: (email: string, password: string) =>
     request<{ user: User }>('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
   logout: () => request<{ ok: true }>('/api/auth/logout', { method: 'POST' }),
-  updateMe: (tz: string) => request<{ ok: true }>('/api/auth/me', { method: 'PATCH', body: JSON.stringify({ tz }) }),
+  updateMe: (params: { tz?: string; recent_logs_scope?: 'wtd'|'wtd_prev'|'mtd'|'mtd_prev' }) =>
+    request<{ ok: true }>('/api/auth/me', { method: 'PATCH', body: JSON.stringify(params) }),
 
   // Event types
   eventTypes: () => request<{ event_types: { id: number; name: string; active: number }[] }>('/api/event-types'),

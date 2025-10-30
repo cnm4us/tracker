@@ -14,7 +14,8 @@
     "db:seed:wipe": "tsx server/scripts/wipe_seed.ts",
     "db:nuke:entries": "tsx server/scripts/nuke_entries.ts",
     "db:backup:schema": "tsx server/scripts/backup_db.ts --schema",
-    "db:backup:full": "tsx server/scripts/backup_db.ts --full"
+    "db:backup:full": "tsx server/scripts/backup_db.ts --full",
+    "db:migrate:add-recent-logs": "tsx server/scripts/migrate_add_recent_logs_scope.ts"
   },
   "dependencies": {
     "react": "^19.1.1",
