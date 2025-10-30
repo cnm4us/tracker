@@ -117,7 +117,9 @@ export function localDateTimeToUTCISO(ymd: string, hhmm: string, tz?: string): s
   for (let i = 0; i < 2; i++) {
     const offMin = tzOffsetMinutesAt(new Date(guess), tz)
     const base = Date.UTC(y, (m || 1) - 1, d || 1, hh || 0, mm || 0, 0)
-    const corrected = base - offMin * 60000
+    // offMin is the number of minutes local time is behind/ahead of UTC at this instant.
+    // To convert local wall time -> UTC instant, ADD the offset minutes.
+    const corrected = base + offMin * 60000
     if (corrected === guess) break
     guess = corrected
   }
