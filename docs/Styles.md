@@ -25,8 +25,11 @@ Buttons use a glass style tinted by `--btn-color`. Common values and usage:
   - Search (Log Search) (src/App.tsx:1129–1134)
 - Info/neutral blue `#1976d2`
   - Login (src/App.tsx:488–499)
-  - Download CSV (src/App.tsx:1139–1146)
+  - Download CSV when there are no search results (Log Search)
   - Start (when an entry is already active) (src/App.tsx:324)
+  
+- Brand amber `#ffb616`
+  - Download CSV when search results are present (Log Search)
 - Danger red `#d32f2f`
   - Stop (timer), Cancel, Logout (src/App.tsx:330–332, 467–469, 846–855, 870s)
 - Nav blue `#0d47a1`
@@ -49,6 +52,7 @@ Surfaces and text
   - Focus: outline uses a mix of `--btn-color` (src/index.css:75–78)
 - Tinting: supply `--btn-color` inline to color the button, e.g.
   - `style={{ ...btnStyle, color: '#fff', ['--btn-color' as any]: '#2e7d32' }}`
+  - Conditional example (CSV on Log Search): `['--btn-color']: results.length > 0 ? '#ffb616' : '#1976d2'`
 - Press state: add `btn3d-pressed` programmatically to maintain pressed look (e.g., active Start button) (src/App.tsx:323, 330)
 
 ## Layout
@@ -95,4 +99,3 @@ Surfaces and text
 
 - Input borders and various overlays use semi‑transparent white (`rgba(255,255,255,0.35)` / `rgba(255,255,255,0.5)`) for the dark theme.
 - Media queries prefer reduced motion and light/dark scheme adjustments per user settings.
-

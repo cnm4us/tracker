@@ -970,6 +970,11 @@ function LogSearchScreen(props: { allEvents: string[], tz?: string, user?: User 
   }
 
   async function downloadCsv() {
+    // If there are no search results at all, show a helpful message
+    if (!results.length) {
+      try { alert('No records to export'); } catch {}
+      return
+    }
     // Ensure events are hydrated for all rows
     let rows: Entry[] = results
     if (rows.some(r => !Array.isArray(r.events))) {
@@ -985,6 +990,12 @@ function LogSearchScreen(props: { allEvents: string[], tz?: string, user?: User 
     }
     // Exclude active (no stop when start present)
     rows = rows.filter(r => !(r.start_iso && !r.stop_iso))
+
+    // If nothing remains after filtering, let the user know
+    if (!rows.length) {
+      try { alert('No records to export'); } catch {}
+      return
+    }
 
     // Event columns from all active event types for stable headers
     const eventCols = [...props.allEvents].sort((a,b)=>a.localeCompare(b))
@@ -1139,7 +1150,7 @@ function LogSearchScreen(props: { allEvents: string[], tz?: string, user?: User 
           <button
             onClick={async()=>{ await sound.enable(); sound.playNew(); await downloadCsv() }}
             className="btn3d btn-glass"
-            style={{ ...btnStyle, color: '#fff', ['--btn-color' as any]: '#1976d2' }}
+            style={{ ...btnStyle, color: '#fff', ['--btn-color' as any]: (results.length > 0 ? '#ffb616' : '#1976d2') }}
           >
             Download CSV
           </button>
