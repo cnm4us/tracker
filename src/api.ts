@@ -1,4 +1,11 @@
-export type User = { id: number; email: string; tz: string; role: 'user'|'admin'; recent_logs_scope?: 'wtd'|'wtd_prev'|'mtd'|'mtd_prev' }
+export type User = {
+  id: number;
+  email: string;
+  tz: string;
+  role: 'user'|'admin';
+  recent_logs_scope?: 'wtd'|'wtd_prev'|'mtd'|'mtd_prev';
+  search_default_range?: 'wtd'|'wtd_prev'|'prev_week'|'all_weeks'|'mtd'|'mtd_prev'|'prev_month'|'all_months'|'all_records';
+}
 export type Entry = {
   id: number
   user_id: number
@@ -39,7 +46,7 @@ export const api = {
   login: (email: string, password: string) =>
     request<{ user: User }>('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
   logout: () => request<{ ok: true }>('/api/auth/logout', { method: 'POST' }),
-  updateMe: (params: { tz?: string; recent_logs_scope?: 'wtd'|'wtd_prev'|'mtd'|'mtd_prev' }) =>
+  updateMe: (params: { tz?: string; recent_logs_scope?: 'wtd'|'wtd_prev'|'mtd'|'mtd_prev'; search_default_range?: 'wtd'|'wtd_prev'|'prev_week'|'all_weeks'|'mtd'|'mtd_prev'|'prev_month'|'all_months'|'all_records' }) =>
     request<{ ok: true }>('/api/auth/me', { method: 'PATCH', body: JSON.stringify(params) }),
 
   // Event types

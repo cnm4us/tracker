@@ -54,9 +54,8 @@ function App() {
   const [view, setView] = useState<'time' | 'settings' | 'login' | 'register' | 'new' | 'edit' | 'search'>('login')
   const [returnView, setReturnView] = useState<'time'|'search'|null>(null)
   type SearchState = { begin: string; end: string; site: 'all'|'clinic'|'remote'; events: string[]; results: Entry[]; scrollY?: number; highlightId?: number }
-  const defaultBegin = useMemo(() => { const d=new Date(); d.setDate(d.getDate()-7); const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}` }, [])
-  const defaultEnd = useMemo(() => { const d=new Date(); const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}` }, [])
-  const [searchState, setSearchState] = useState<SearchState>({ begin: defaultBegin, end: defaultEnd, site: 'all', events: [], results: [] })
+  // Leave initial search dates empty so Log Search can apply user "Log Search Defaults"
+  const [searchState, setSearchState] = useState<SearchState>({ begin: '', end: '', site: 'all', events: [], results: [] })
   const [editing, setEditing] = useState<Entry | null>(null)
 
   const [site, setSite] = useState<Site>('clinic')
@@ -305,9 +304,11 @@ function App() {
       ) : view === 'settings' ? (
         <SettingsScreen
           user={user}
-          onSave={async (tz, scope) => {
-            await api.updateMe({ tz, recent_logs_scope: scope })
-            setUser(u => (u ? { ...u, tz, recent_logs_scope: scope } as any : u))
+          onSave={async (tz, scope, searchRange) => {
+            await api.updateMe({ tz, recent_logs_scope: scope, search_default_range: searchRange })
+            setUser(u => (u ? { ...u, tz, recent_logs_scope: scope, search_default_range: searchRange } as any : u))
+            // Clear Log Search dates so next visit uses the new defaults immediately
+            setSearchState(s => ({ ...s, begin: '', end: '', results: [] }))
             setView('time')
           }}
         />
@@ -603,9 +604,10 @@ function RegisterScreen(props: { error: string | null, onRegister: (e:string,p:s
   )
 }
 
-function SettingsScreen(props: { user: User, onSave: (tz:string, scope: 'wtd'|'wtd_prev'|'mtd'|'mtd_prev')=>Promise<void> }) {
+function SettingsScreen(props: { user: User, onSave: (tz:string, recentScope: 'wtd'|'wtd_prev'|'mtd'|'mtd_prev', searchRange: 'wtd'|'wtd_prev'|'prev_week'|'all_weeks'|'mtd'|'mtd_prev'|'prev_month'|'all_months'|'all_records')=>Promise<void> }) {
   const [tz, setTz] = useState<string>(props.user.tz || Intl.DateTimeFormat().resolvedOptions().timeZone)
   const [recentScope, setRecentScope] = useState<'wtd'|'wtd_prev'|'mtd'|'mtd_prev'>(props.user.recent_logs_scope || 'wtd_prev')
+  const [searchRange, setSearchRange] = useState<'wtd'|'wtd_prev'|'prev_week'|'all_weeks'|'mtd'|'mtd_prev'|'prev_month'|'all_months'|'all_records'>(props.user.search_default_range || 'wtd_prev')
   const tzList = (Intl as any).supportedValuesOf ? (Intl as any).supportedValuesOf('timeZone') as string[] : [tz]
   const [saving, setSaving] = useState(false)
   const [sounds, setSounds] = useState<boolean>(() => sound.isEnabled())
@@ -644,9 +646,24 @@ function SettingsScreen(props: { user: User, onSave: (tz:string, scope: 'wtd'|'w
           <label><input type="radio" name="recent_scope" checked={recentScope==='mtd_prev'} onChange={()=>setRecentScope('mtd_prev')} /> MTD and Previous Month</label>
         </div>
       </div>
+
+      <div style={{ margin: '12px 0' }}>
+        <div style={{ fontWeight: 600, marginBottom: 6 }}>Log Search Defaults</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 6 }}>
+          <label><input type="radio" name="search_range" checked={searchRange==='wtd'} onChange={()=>setSearchRange('wtd')} /> WTD: Current Week Only</label>
+          <label><input type="radio" name="search_range" checked={searchRange==='wtd_prev'} onChange={()=>setSearchRange('wtd_prev')} /> WTD and Previous Completed Week</label>
+          <label><input type="radio" name="search_range" checked={searchRange==='prev_week'} onChange={()=>setSearchRange('prev_week')} /> Previous Completed Week</label>
+          <label><input type="radio" name="search_range" checked={searchRange==='all_weeks'} onChange={()=>setSearchRange('all_weeks')} /> All Completed Weeks</label>
+          <label><input type="radio" name="search_range" checked={searchRange==='mtd'} onChange={()=>setSearchRange('mtd')} /> MTD: Current Month Only</label>
+          <label><input type="radio" name="search_range" checked={searchRange==='mtd_prev'} onChange={()=>setSearchRange('mtd_prev')} /> MTD and Previous Completed Month</label>
+          <label><input type="radio" name="search_range" checked={searchRange==='prev_month'} onChange={()=>setSearchRange('prev_month')} /> Previous Completed Month</label>
+          <label><input type="radio" name="search_range" checked={searchRange==='all_months'} onChange={()=>setSearchRange('all_months')} /> All Completed Months</label>
+          <label><input type="radio" name="search_range" checked={searchRange==='all_records'} onChange={()=>setSearchRange('all_records')} /> All Records</label>
+        </div>
+      </div>
       <button
         disabled={saving}
-        onClick={async()=>{ setSaving(true); try { await sound.enable(); sound.playStart(); await props.onSave(tz, recentScope) } finally { setSaving(false) } }}
+        onClick={async()=>{ setSaving(true); try { await sound.enable(); sound.playStart(); await props.onSave(tz, recentScope, searchRange) } finally { setSaving(false) } }}
         className="btn3d btn-glass"
         style={{ ...btnStyle, color: '#fff', width: '100%', ['--btn-color' as any]: '#2e7d32' }}
       >
@@ -972,16 +989,105 @@ function LogSearchScreen(props: { allEvents: string[], tz?: string, user?: User 
     try { const v = localStorage.getItem('show_weekly_totals'); return v === null ? true : v !== '0' } catch { return true }
   })
 
-  // Initialize default dates if not provided
+  // Initialize default dates from user setting if not provided
   useEffect(() => {
-    if (!begin || !end) {
-      const d1 = new Date(); d1.setDate(d1.getDate() - 7)
-      const d2 = new Date()
-      const y1 = d1.getFullYear(); const m1 = String(d1.getMonth()+1).padStart(2,'0'); const day1 = String(d1.getDate()).padStart(2,'0')
-      const y2 = d2.getFullYear(); const m2 = String(d2.getMonth()+1).padStart(2,'0'); const day2 = String(d2.getDate()).padStart(2,'0')
-      if (!begin) setBegin(`${y1}-${m1}-${day1}`)
-      if (!end) setEnd(`${y2}-${m2}-${day2}`)
+    if (!begin && !end) {
+      (async () => {
+        const today = ymdInTZ(new Date(), tz)
+        const ws = weekStartSunday(today)
+        const firstOfMonth = (ymd: string) => ymd.slice(0,8) + '01'
+        const lastOfPrevMonth = (ymd: string): string => {
+          const y = parseInt(ymd.slice(0,4),10)
+          const m = parseInt(ymd.slice(5,7),10)
+          const d = new Date(Date.UTC(y, m-1, 1))
+          d.setUTCDate(0) // last day of previous month
+          const yy = d.getUTCFullYear()
+          const mm = String(d.getUTCMonth()+1).padStart(2,'0')
+          const dd = String(d.getUTCDate()).padStart(2,'0')
+          return `${yy}-${mm}-${dd}`
+        }
+        const prevWeekBegin = addDaysYMD(ws, -7)
+        const prevWeekEnd = addDaysYMD(ws, -1)
+        const range = props.user?.search_default_range || 'wtd_prev'
+        let b = ''
+        let e = ''
+        switch (range) {
+          case 'wtd':
+            b = ws; e = today; break
+          case 'wtd_prev':
+            b = prevWeekBegin; e = today; break
+          case 'prev_week':
+            b = prevWeekBegin; e = prevWeekEnd; break
+          case 'all_weeks':
+            e = prevWeekEnd; break
+          case 'mtd':
+            b = firstOfMonth(today); e = today; break
+          case 'mtd_prev':
+            {
+              const firstPrev = firstOfMonth(addDaysYMD(firstOfMonth(today), -1))
+              b = firstPrev; e = today
+            }
+            break
+          case 'prev_month':
+            {
+              const firstPrev = firstOfMonth(addDaysYMD(firstOfMonth(today), -1))
+              const lastPrev = lastOfPrevMonth(today)
+              b = firstPrev; e = lastPrev
+            }
+            break
+          case 'all_months':
+            {
+              const lastPrev = lastOfPrevMonth(today)
+              e = lastPrev
+            }
+            break
+          case 'all_records':
+          default:
+            b = ''; e = ''
+        }
+
+        // For "all_weeks" and "all_months", compute the earliest entry date to populate begin
+        if ((range === 'all_weeks' || range === 'all_months') && !b) {
+          try {
+            const { entries } = await api.list(1000)
+            let minY: string | null = null
+            for (const r of entries) {
+              const y = normalizeYMD((r as any).start_local_date, tz) || (r.start_iso ? ymdInTZ(new Date(r.start_iso), tz) : '')
+              if (!y) continue
+              if (!minY || y < minY) minY = y
+            }
+            if (minY) {
+              b = range === 'all_weeks' ? weekStartSunday(minY) : (minY.slice(0,8) + '01')
+            }
+          } catch {}
+          if (!b) {
+            // Fallback: use previous completed window start if no entries or error
+            b = range === 'all_weeks' ? prevWeekBegin : firstOfMonth(addDaysYMD(firstOfMonth(today), -1))
+          }
+        }
+
+        // For "all_records", populate both begin and end from record set
+        if (range === 'all_records') {
+          try {
+            const { entries } = await api.list(1000)
+            let minY: string | null = null
+            let maxY: string | null = null
+            for (const r of entries) {
+              const y = normalizeYMD((r as any).start_local_date, tz) || (r.start_iso ? ymdInTZ(new Date(r.start_iso), tz) : '')
+              if (!y) continue
+              if (!minY || y < minY) minY = y
+              if (!maxY || y > maxY) maxY = y
+            }
+            if (minY) b = minY
+            if (maxY) e = maxY
+          } catch {}
+        }
+
+        setBegin(b)
+        setEnd(e)
+      })()
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   function toggleEvent(name: string) {
