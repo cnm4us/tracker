@@ -1128,7 +1128,7 @@ function LogSearchScreen(props: { allEvents: string[], tz?: string, user?: User 
       <button
         onClick={async()=>{ await sound.enable(); sound.playNew(); await onSearch() }}
         className="btn3d btn-glass"
-        style={{ ...btnStyle, color: '#fff', width: '100%', ['--btn-color' as any]: '#1976d2' }}
+        style={{ ...btnStyle, color: '#fff', width: '100%', ['--btn-color' as any]: '#2e7d32' }}
       >
         Search
       </button>
