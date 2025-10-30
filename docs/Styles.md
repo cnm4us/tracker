@@ -8,6 +8,7 @@ This document tracks UI styling choices and how to apply them across the app. Up
 - App container stack: `system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif` (src/App.tsx:16–23)
 - iOS zoom prevention: inputs/selects/textarea use font-size ≥ 16px; `.avoidZoom` sets 17px (src/index.css:33–36)
 
+
 ## Colors
 
 Brand/accents
