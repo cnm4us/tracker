@@ -68,6 +68,14 @@ export function addDaysYMD(ymd: string, days: number = 1): string {
   return `${y}-${m}-${d}`
 }
 
+export function toHHMMInTZ(iso?: string | null, tz?: string): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return ''
+  const fmt = new Intl.DateTimeFormat('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit', timeZone: tz || 'UTC' })
+  return fmt.format(d) // HH:MM
+}
+
 // pad2 reserved for future use
 
 function buildIsoLikeFromParts(parts: Intl.DateTimeFormatPart[]): string {

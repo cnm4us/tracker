@@ -3,7 +3,7 @@ import './App.css'
 import { api, formatCivilPartsTZ, formatDayMonTZ, formatDuration, ymdInTZ } from './api'
 import type { Entry, User } from './api'
 import sound from './sound'
-import { dateForDisplay as timeDateForDisplay, durationMinutes as timeDurationMinutes, weekStartSunday, weekEndSaturday, formatMMDD, normalizeYMD, localDateTimeToUTCISO, addDaysYMD } from './time'
+import { dateForDisplay as timeDateForDisplay, durationMinutes as timeDurationMinutes, weekStartSunday, weekEndSaturday, formatMMDD, normalizeYMD, localDateTimeToUTCISO, addDaysYMD, toHHMMInTZ } from './time'
 
 type Site = 'clinic' | 'remote'
 
@@ -273,6 +273,7 @@ function App() {
         <LogSearchScreen
           allEvents={allEvents}
           tz={tz}
+          user={user}
           initialState={searchState}
           onStateChange={(st)=>setSearchState(st)}
           onOpenEntry={(entry)=>{ try { setSearchState(s=>({ ...s, scrollY: window.scrollY, highlightId: entry.id })) } catch {}; setReturnView('search'); setEditing(entry); setView('edit') }}
@@ -868,7 +869,7 @@ function NewEntryScreen(props: { mode?: 'new'|'edit', entry?: Entry, defaultSite
 }
 
 type SearchState = { begin: string; end: string; site: 'all'|'clinic'|'remote'; events: string[]; results: Entry[]; scrollY?: number; highlightId?: number }
-function LogSearchScreen(props: { allEvents: string[], tz?: string, initialState?: SearchState, onStateChange?: (st: SearchState)=>void, onOpenEntry: (e: Entry)=>void }) {
+function LogSearchScreen(props: { allEvents: string[], tz?: string, user?: User | null, initialState?: SearchState, onStateChange?: (st: SearchState)=>void, onOpenEntry: (e: Entry)=>void }) {
   const tz = props.tz || Intl.DateTimeFormat().resolvedOptions().timeZone
   const [begin, setBegin] = useState<string>(props.initialState?.begin || '')
   const [end, setEnd] = useState<string>(props.initialState?.end || '')
@@ -960,6 +961,79 @@ function LogSearchScreen(props: { allEvents: string[], tz?: string, initialState
     } finally {
       setLoading(false)
     }
+  }
+
+  function csvEscape(val: any): string {
+    const s = val == null ? '' : String(val)
+    if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"'
+    return s
+  }
+
+  async function downloadCsv() {
+    // Ensure events are hydrated for all rows
+    let rows: Entry[] = results
+    if (rows.some(r => !Array.isArray(r.events))) {
+      const ids = rows.map(r => r.id)
+      const detailed: Entry[] = []
+      const concurrency = 8
+      for (let i = 0; i < ids.length; i += concurrency) {
+        const slice = ids.slice(i, i + concurrency)
+        const chunk = await Promise.all(slice.map(async (id) => { try { const { entry } = await api.getEntry(id); return entry as Entry } catch { return null } }))
+        for (const ent of chunk) if (ent) detailed.push(ent)
+      }
+      rows = detailed
+    }
+    // Exclude active (no stop when start present)
+    rows = rows.filter(r => !(r.start_iso && !r.stop_iso))
+
+    // Event columns from all active event types for stable headers
+    const eventCols = [...props.allEvents].sort((a,b)=>a.localeCompare(b))
+
+    const headers = [
+      'User ID','User Email','Record ID','Site',
+      ...eventCols,
+      'Date Start','Time Start','Date End','Time End','Total Hours','Notes'
+    ]
+    const userId = props.user?.id ?? ''
+    const userEmail = props.user?.email ?? ''
+    const tzLocal = tz
+    const lines: string[] = []
+    lines.push(headers.join(','))
+    for (const e of rows) {
+      const ymdStart = normalizeYMD(e.start_local_date, tzLocal) || (e.start_iso ? ymdInTZ(new Date(e.start_iso), tzLocal) : '')
+      const ymdEnd = e.stop_iso ? ymdInTZ(new Date(e.stop_iso), tzLocal) : (e.start_iso ? ymdInTZ(new Date(e.start_iso), tzLocal) : '')
+      const hmStart = e.start_iso ? toHHMMInTZ(e.start_iso, tzLocal) : ''
+      const hmEnd = e.stop_iso ? toHHMMInTZ(e.stop_iso, tzLocal) : ''
+      const mins = typeof e.duration_min === 'number' ? e.duration_min : (e.start_iso && e.stop_iso ? Math.max(0, Math.round((+new Date(e.stop_iso) - +new Date(e.start_iso)) / 60000)) : 0)
+      const hoursDec = (mins/60).toFixed(2)
+      const evSet = new Set((e.events || []))
+      const row = [
+        userId,
+        userEmail,
+        e.id,
+        e.site || '',
+        ...eventCols.map(name => evSet.has(name) ? '1' : ''),
+        ymdStart,
+        hmStart,
+        ymdEnd,
+        hmEnd,
+        hoursDec,
+        e.notes || ''
+      ]
+      lines.push(row.map(csvEscape).join(','))
+    }
+    const csv = '\uFEFF' + lines.join('\r\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    const beginName = begin || ''
+    const endName = end || ''
+    a.href = url
+    a.download = `time-tracker_${beginName || 'start'}_to_${endName || 'end'}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   }
 
   useEffect(() => {
@@ -1060,7 +1134,16 @@ function LogSearchScreen(props: { allEvents: string[], tz?: string, initialState
       </button>
 
       <div style={{ marginTop: 16 }}>
-        <h3 style={{ margin: '16px 0 8px' }}>Results</h3>
+        <div className="logsWide" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <h3 style={{ margin: '16px 0 8px' }}>Results</h3>
+          <button
+            onClick={async()=>{ await sound.enable(); sound.playNew(); await downloadCsv() }}
+            className="btn3d btn-glass"
+            style={{ ...btnStyle, color: '#fff', ['--btn-color' as any]: '#1976d2' }}
+          >
+            Download CSV
+          </button>
+        </div>
         <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
           <input id="toggleTotals" type="checkbox" checked={showTotals} onChange={(e)=>{ setShowTotals(e.target.checked); try { localStorage.setItem('show_weekly_totals', e.target.checked ? '1' : '0') } catch {} }} />
           <label htmlFor="toggleTotals">Show weekly totals</label>
