@@ -11,6 +11,11 @@ This document tracks UI styling choices and how to apply them across the app. Up
 
 ## Colors
 
+Theme
+- Dark theme is enforced across the app regardless of OS preference.
+  - `:root` uses `color-scheme: dark` and a dark background `#242424`.
+  - The previous light-mode `@media (prefers-color-scheme: light)` override was removed.
+
 Brand/accents
 - Amber accent `#ffb616`
   - Checkbox/radio `accent-color` (src/index.css:84–88)
