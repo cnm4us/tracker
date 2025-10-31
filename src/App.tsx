@@ -68,6 +68,9 @@ function App() {
   const [activeEntry, setActiveEntry] = useState<Entry | null>(null)
   const [stopping, setStopping] = useState(false)
   const [totalsEntries, setTotalsEntries] = useState<Entry[]>([])
+  // Preserve scroll + highlight when returning from Edit back to Timed Entry
+  const [timeScrollY, setTimeScrollY] = useState<number | undefined>(undefined)
+  const [timeHighlightId, setTimeHighlightId] = useState<number | undefined>(undefined)
 
   const now = useClock()
 
@@ -281,8 +284,36 @@ function App() {
   useEffect(() => {
     // If navigating to search and we have a saved scrollY, let LogSearchScreen restore it.
     if (view === 'search' && (searchState.scrollY != null)) return
+    // If navigating to time and we have a saved scrollY, let Timed Entry restore it.
+    if (view === 'time' && (timeScrollY != null)) return
     try { window.scrollTo({ top: 0, behavior: 'auto' }) } catch {}
+    // Note: only run on view change; do not depend on scroll markers to avoid re-scrolling to top after restore
   }, [view])
+
+  // Restore scroll position and flash the last-edited row when returning to Timed Entry
+  useEffect(() => {
+    if (view !== 'time') return
+    const sc = timeScrollY
+    const hid = timeHighlightId
+    if ((sc != null && !isNaN(sc as any)) || (hid != null)) {
+      requestAnimationFrame(() => {
+        if (typeof sc === 'number' && !isNaN(sc)) {
+          try { window.scrollTo(0, sc) } catch {}
+        }
+        if (hid != null) {
+          try {
+            const el = document.querySelector(`[data-entry-id="${hid}"]`) as HTMLElement | null
+            if (el) {
+              el.classList.add('flash-highlight')
+              setTimeout(() => { el.classList.remove('flash-highlight') }, 1200)
+            }
+          } catch {}
+        }
+        setTimeScrollY(undefined)
+        setTimeHighlightId(undefined)
+      })
+    }
+  }, [view, entries])
 
   if (loading) return <div style={containerStyle}>Loading…</div>
   return (
@@ -436,8 +467,8 @@ function App() {
                 const strongTop = hasMultipleWeeksTimed && prevWeekForRender && ws && ws !== prevWeekForRender
                 prevWeekForRender = ws || prevWeekForRender
                 return (
-                <div key={e.id} className="logsRow" style={{ padding: '8px 0', borderBottom: '1px solid rgba(238,238,238,0.5)', borderTop: strongTop ? '1px solid rgba(238,238,238,1)' : undefined }}>
-                  <div className="cellDay" style={{ cursor: 'pointer', textDecoration: 'none', color: '#ffb616' }} onClick={()=>{ setReturnView('time'); setEditing(e); setView('edit') }}>{formatDayMonTZ(dateForDisplay, tz)}</div>
+                <div key={e.id} className="logsRow" data-entry-id={e.id} style={{ padding: '8px 0', borderBottom: '1px solid rgba(238,238,238,0.5)', borderTop: strongTop ? '1px solid rgba(238,238,238,1)' : undefined }}>
+                  <div className="cellDay" style={{ cursor: 'pointer', textDecoration: 'none', color: '#ffb616' }} onClick={()=>{ try { setTimeScrollY(window.scrollY); setTimeHighlightId(e.id) } catch {}; setReturnView('time'); setEditing(e); setView('edit') }}>{formatDayMonTZ(dateForDisplay, tz)}</div>
                   <div className="cellNotes" title={e.notes || ''}>{e.notes || ''}</div>
                   <div className={`cellStart ${isActiveRow ? 'pulse' : ''}`}>{start ? renderCivil(start, tz) : '—'}</div>
                   <div className="cellStop">{stop ? renderCivil(stop, tz) : '—'}</div>
@@ -1200,6 +1231,7 @@ function LogSearchScreen(props: { allEvents: string[], tz?: string, user?: User 
     const headers = [
       'User ID','User Email','Record ID','Site',
       ...eventCols,
+      'Events',
       'Date Start','Time Start','Date End','Time End','Total Hours','Notes'
     ]
     const userId = props.user?.id ?? ''
@@ -1214,13 +1246,16 @@ function LogSearchScreen(props: { allEvents: string[], tz?: string, user?: User 
       const hmEnd = e.stop_iso ? toHHMMInTZ(e.stop_iso, tzLocal) : ''
       const mins = typeof e.duration_min === 'number' ? e.duration_min : (e.start_iso && e.stop_iso ? Math.max(0, Math.round((+new Date(e.stop_iso) - +new Date(e.start_iso)) / 60000)) : 0)
       const hoursDec = (mins/60).toFixed(2)
-      const evSet = new Set((e.events || []))
+      const evArr = Array.isArray(e.events) ? (e.events as string[]) : []
+      const evSet = new Set(evArr)
+      const eventsJoined = evArr.join(', ')
       const row = [
         userId,
         userEmail,
         e.id,
         e.site || '',
         ...eventCols.map(name => evSet.has(name) ? '1' : ''),
+        eventsJoined,
         ymdStart,
         hmStart,
         ymdEnd,
