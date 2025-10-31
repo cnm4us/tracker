@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, lazy, Suspense } from 'react'
+const SettingsScreen = lazy(() => import('./screens/SettingsScreen'))
+const LogSearchScreen = lazy(() => import('./screens/LogSearchScreen'))
 import './App.css'
 import { api, formatCivilPartsTZ, formatDayMonTZ, formatDuration, ymdInTZ } from './api'
 import type { Entry, User } from './api'
 import sound from './sound'
-import { dateForDisplay as timeDateForDisplay, durationMinutes as timeDurationMinutes, weekStartSunday, weekEndSaturday, formatMMDD, normalizeYMD, localDateTimeToUTCISO, addDaysYMD, toHHMMInTZ } from './time'
+import { dateForDisplay as timeDateForDisplay, durationMinutes as timeDurationMinutes, weekStartSunday, weekEndSaturday, normalizeYMD, localDateTimeToUTCISO, addDaysYMD } from './time'
 
 type Site = 'clinic' | 'remote'
 
@@ -53,7 +55,7 @@ function App() {
   const [error, setError] = useState<string | null>(null)
   const [view, setView] = useState<'time' | 'settings' | 'login' | 'register' | 'new' | 'edit' | 'search'>('login')
   const [returnView, setReturnView] = useState<'time'|'search'|null>(null)
-  type SearchState = { begin: string; end: string; site: 'all'|'clinic'|'remote'; events: string[]; results: Entry[]; scrollY?: number; highlightId?: number }
+type SearchState = { begin: string; end: string; site: 'all'|'clinic'|'remote'; events: string[]; results: Entry[]; scrollY?: number; highlightId?: number }
   // Leave initial search dates empty so Log Search can apply user "Log Search Defaults"
   const [searchState, setSearchState] = useState<SearchState>({ begin: '', end: '', site: 'all', events: [], results: [] })
   const [editing, setEditing] = useState<Entry | null>(null)
@@ -90,6 +92,16 @@ function App() {
       try { await refreshTotals() } catch {}
     })()
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Idle prefetch of lazily-loaded screens to smooth first navigation
+  useEffect(() => {
+    const pre = () => { try { import('./screens/SettingsScreen'); import('./screens/LogSearchScreen') } catch {} }
+    try {
+      const ric = (window as any).requestIdleCallback as undefined | ((cb: () => void) => void)
+      if (typeof ric === 'function') ric(pre)
+      else setTimeout(pre, 0)
+    } catch { setTimeout(pre, 0) }
   }, [])
 
   async function refreshEntries() {
@@ -333,16 +345,22 @@ function App() {
           <AuthScreen error={error} onLogin={onLogin} />
         )
       ) : view === 'settings' ? (
-        <SettingsScreen
-          user={user}
-          onSave={async (tz, scope, searchRange) => {
-            await api.updateMe({ tz, recent_logs_scope: scope, search_default_range: searchRange })
-            setUser(u => (u ? { ...u, tz, recent_logs_scope: scope, search_default_range: searchRange } as any : u))
-            // Clear Log Search dates so next visit uses the new defaults immediately
-            setSearchState(s => ({ ...s, begin: '', end: '', results: [] }))
-            setView('time')
-          }}
-        />
+        <Suspense fallback={<div>Loading…</div>}>
+          <SettingsScreen
+            user={user}
+            onSave={async (
+              tz: string,
+              scope: 'wtd'|'wtd_prev'|'mtd'|'mtd_prev',
+              searchRange: 'wtd'|'wtd_prev'|'prev_week'|'all_weeks'|'mtd'|'mtd_prev'|'prev_month'|'all_months'|'all_records'
+            ) => {
+              await api.updateMe({ tz, recent_logs_scope: scope, search_default_range: searchRange })
+              setUser(u => (u ? { ...u, tz, recent_logs_scope: scope, search_default_range: searchRange } as any : u))
+              // Clear Log Search dates so next visit uses the new defaults immediately
+              setSearchState(s => ({ ...s, begin: '', end: '', results: [] }))
+              setView('time')
+            }}
+          />
+        </Suspense>
       ) : view === 'new' ? (
         <NewEntryScreen
           defaultSite={site}
@@ -378,14 +396,16 @@ function App() {
           }}
         />
       ) : view === 'search' ? (
-        <LogSearchScreen
-          allEvents={allEvents}
-          tz={tz}
-          user={user}
-          initialState={searchState}
-          onStateChange={(st)=>setSearchState(st)}
-          onOpenEntry={(entry)=>{ try { setSearchState(s=>({ ...s, scrollY: window.scrollY, highlightId: entry.id })) } catch {}; setReturnView('search'); setEditing(entry); setView('edit') }}
-        />
+        <Suspense fallback={<div>Loading…</div>}>
+          <LogSearchScreen
+            allEvents={allEvents}
+            tz={tz}
+            user={user}
+            initialState={searchState}
+            onStateChange={(st)=>setSearchState(st)}
+            onOpenEntry={(entry)=>{ try { setSearchState(s=>({ ...s, scrollY: window.scrollY, highlightId: entry.id })) } catch {}; setReturnView('search'); setEditing(entry); setView('edit') }}
+          />
+        </Suspense>
       ) : (
         <>
           <div style={{ marginTop: 8, marginBottom: 12, display: 'flex', gap: 12, alignItems: 'baseline', justifyContent: 'space-between' }}>
@@ -635,74 +655,7 @@ function RegisterScreen(props: { error: string | null, onRegister: (e:string,p:s
   )
 }
 
-function SettingsScreen(props: { user: User, onSave: (tz:string, recentScope: 'wtd'|'wtd_prev'|'mtd'|'mtd_prev', searchRange: 'wtd'|'wtd_prev'|'prev_week'|'all_weeks'|'mtd'|'mtd_prev'|'prev_month'|'all_months'|'all_records')=>Promise<void> }) {
-  const [tz, setTz] = useState<string>(props.user.tz || Intl.DateTimeFormat().resolvedOptions().timeZone)
-  const [recentScope, setRecentScope] = useState<'wtd'|'wtd_prev'|'mtd'|'mtd_prev'>(props.user.recent_logs_scope || 'wtd_prev')
-  const [searchRange, setSearchRange] = useState<'wtd'|'wtd_prev'|'prev_week'|'all_weeks'|'mtd'|'mtd_prev'|'prev_month'|'all_months'|'all_records'>(props.user.search_default_range || 'wtd_prev')
-  const tzList = (Intl as any).supportedValuesOf ? (Intl as any).supportedValuesOf('timeZone') as string[] : [tz]
-  const [saving, setSaving] = useState(false)
-  const [sounds, setSounds] = useState<boolean>(() => sound.isEnabled())
-  return (
-    <div style={{ marginTop: 12 }}>
-      <label style={{ display:'block', fontSize: 18, color: '#fff', marginBottom: 6 }}>Time Zone</label>
-      <select
-        value={tz}
-        onChange={e=>setTz(e.target.value)}
-        style={{
-          width: '100%',
-          maxWidth: '100%',
-          padding: 12,
-          border: '1px solid #ccc',
-          borderRadius: 8,
-          marginBottom: 12,
-          fontSize: 18,
-          minHeight: 44,
-          boxSizing: 'border-box',
-          color: '#ffb616',
-        }}
-      >
-        {tzList.map((z) => <option key={z} value={z}>{z}</option>)}
-      </select>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '8px 0 16px' }}>
-        <input className="brand" id="sounds" type="checkbox" checked={sounds} onChange={(e)=>{ setSounds(e.target.checked); sound.setEnabled(e.target.checked) }} />
-        <label htmlFor="sounds">Button Sounds</label>
-      </div>
-
-      <div style={{ margin: '12px 0' }}>
-        <div style={{ fontWeight: 600, marginBottom: 6 }}>Recent Logs</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 6 }}>
-          <label><input type="radio" name="recent_scope" checked={recentScope==='wtd'} onChange={()=>setRecentScope('wtd')} /> WTD: Current Week Only</label>
-          <label><input type="radio" name="recent_scope" checked={recentScope==='wtd_prev'} onChange={()=>setRecentScope('wtd_prev')} /> WTD and Previous Week</label>
-          <label><input type="radio" name="recent_scope" checked={recentScope==='mtd'} onChange={()=>setRecentScope('mtd')} /> MTD: Current Month Only</label>
-          <label><input type="radio" name="recent_scope" checked={recentScope==='mtd_prev'} onChange={()=>setRecentScope('mtd_prev')} /> MTD and Previous Month</label>
-        </div>
-      </div>
-
-      <div style={{ margin: '12px 0' }}>
-        <div style={{ fontWeight: 600, marginBottom: 6 }}>Log Search Defaults</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 6 }}>
-          <label><input type="radio" name="search_range" checked={searchRange==='wtd'} onChange={()=>setSearchRange('wtd')} /> WTD: Current Week Only</label>
-          <label><input type="radio" name="search_range" checked={searchRange==='wtd_prev'} onChange={()=>setSearchRange('wtd_prev')} /> WTD and Previous Completed Week</label>
-          <label><input type="radio" name="search_range" checked={searchRange==='prev_week'} onChange={()=>setSearchRange('prev_week')} /> Previous Completed Week</label>
-          <label><input type="radio" name="search_range" checked={searchRange==='all_weeks'} onChange={()=>setSearchRange('all_weeks')} /> All Completed Weeks</label>
-          <label><input type="radio" name="search_range" checked={searchRange==='mtd'} onChange={()=>setSearchRange('mtd')} /> MTD: Current Month Only</label>
-          <label><input type="radio" name="search_range" checked={searchRange==='mtd_prev'} onChange={()=>setSearchRange('mtd_prev')} /> MTD and Previous Completed Month</label>
-          <label><input type="radio" name="search_range" checked={searchRange==='prev_month'} onChange={()=>setSearchRange('prev_month')} /> Previous Completed Month</label>
-          <label><input type="radio" name="search_range" checked={searchRange==='all_months'} onChange={()=>setSearchRange('all_months')} /> All Completed Months</label>
-          <label><input type="radio" name="search_range" checked={searchRange==='all_records'} onChange={()=>setSearchRange('all_records')} /> All Records</label>
-        </div>
-      </div>
-      <button
-        disabled={saving}
-        onClick={async()=>{ setSaving(true); try { await sound.enable(); sound.playStart(); await props.onSave(tz, recentScope, searchRange) } finally { setSaving(false) } }}
-        className="btn3d btn-glass"
-        style={{ ...btnStyle, color: '#fff', width: '100%', ['--btn-color' as any]: '#2e7d32' }}
-      >
-        Save
-      </button>
-    </div>
-  )
-}
+// (SettingsScreen moved to src/screens and lazy-loaded below)
 
 function NewEntryScreen(props: { mode?: 'new'|'edit', entry?: Entry, defaultSite: Site, defaultEvents: string[], allEvents: string[], tz?: string, onCancel: ()=>void, onCreated: ()=>Promise<void> }) {
   const tz = props.tz || Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -1007,19 +960,9 @@ function NewEntryScreen(props: { mode?: 'new'|'edit', entry?: Entry, defaultSite
   )
 }
 
-type SearchState = { begin: string; end: string; site: 'all'|'clinic'|'remote'; events: string[]; results: Entry[]; scrollY?: number; highlightId?: number }
-function LogSearchScreen(props: { allEvents: string[], tz?: string, user?: User | null, initialState?: SearchState, onStateChange?: (st: SearchState)=>void, onOpenEntry: (e: Entry)=>void }) {
-  const tz = props.tz || Intl.DateTimeFormat().resolvedOptions().timeZone
-  const [begin, setBegin] = useState<string>(props.initialState?.begin || '')
-  const [end, setEnd] = useState<string>(props.initialState?.end || '')
-  const [site, setSite] = useState<'all'|'clinic'|'remote'>(props.initialState?.site || 'all')
-  const [events, setEvents] = useState<string[]>(props.initialState?.events || [])
-  const [results, setResults] = useState<Entry[]>(props.initialState?.results || [])
-  const [loading, setLoading] = useState(false)
-  const [showTotals, setShowTotals] = useState<boolean>(() => {
-    try { const v = localStorage.getItem('show_weekly_totals'); return v === null ? true : v !== '0' } catch { return true }
-  })
+// LogSearchScreen moved to src/screens/LogSearchScreen.tsx and lazy-loaded
 
+  /*
   // Initialize default dates from user setting if not provided
   useEffect(() => {
     if (!begin && !end) {
@@ -1434,6 +1377,5 @@ function LogSearchScreen(props: { allEvents: string[], tz?: string, user?: User 
       </div>
     </div>
   )
-}
-
+*/
 export default App
