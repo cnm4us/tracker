@@ -1,4 +1,21 @@
-import 'dotenv/config'
+import fs from 'fs'
+import path from 'path'
+import { config as dotenvConfig } from 'dotenv'
+
+// Load environment from .env.<NODE_ENV> if present; fallback to .env
+(() => {
+  try {
+    const mode = process.env.NODE_ENV || 'development'
+    const envPath = path.resolve(process.cwd(), `.env.${mode}`)
+    if (fs.existsSync(envPath)) {
+      dotenvConfig({ path: envPath })
+    } else {
+      dotenvConfig()
+    }
+  } catch {
+    // ignore; process.env still available
+  }
+})()
 
 export const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -18,4 +35,3 @@ export const env = {
   accessTtlSec: Number(process.env.ACCESS_TTL_SEC || 15 * 60), // 15m
   refreshTtlSec: Number(process.env.REFRESH_TTL_SEC || 90 * 24 * 60 * 60), // 90d
 }
-
