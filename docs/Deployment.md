@@ -34,6 +34,34 @@ This guide documents how we use Git branches, environment files, and system serv
   - “Fast‑forward only”: update your branch pointer to match `origin/main` without creating a merge commit.
   - If it fails, your local `main` has diverged. Use `git reset --hard origin/main` (recommended on prod) or fix locally in dev and push again.
 
+## Simple Deployment Flow (Current Practice)
+
+This streamlined process keeps `main` as the source of truth on the remote and avoids switching branches in the `tracker_dev` worktree.
+
+1) In `tracker_dev` (on `dev`)
+   - `git fetch origin`
+   - `git rebase origin/main`  # resolve conflicts; keeps history linear
+   - `git push origin dev:main`  # updates remote `main` without checking it out locally
+
+2) In `tracker_prod` (on `main`)
+   - `git fetch origin`
+   - `git reset --hard origin/main`  # make local `main` match remote `main`
+   - `npm ci`
+   - `npm run build`
+   - `sudo systemctl restart tracker-api`
+
+Notes and caveats
+- Worktrees: because `main` is checked out in `tracker_prod`, attempting to `git switch main` in `tracker_dev` will fail. The `dev:main` push avoids this.
+- No local changes on prod: do not commit or edit files directly in `tracker_prod`. If you have local modifications, discard them before reset:
+  - Optional backup: `git diff > ../prod-local.diff`
+  - `git reset --hard origin/main`
+  - `git clean -fd -e .env.production` (preview with `-n` first)
+- Protected branches: if `main` is protected, replace `git push origin dev:main` with a PR from `dev` → `main`, merge it, then continue with the prod steps.
+- Consistency: deletions and renames committed on `dev` (and promoted to `main`) are applied automatically by the reset on prod. Untracked leftovers require `git clean`.
+- Idempotency: you can safely run `npm ci` every deploy; it ensures `node_modules` matches `package-lock.json`.
+- Rollbacks: to revert prod to a previous release, choose the target commit on `origin/main` (or tag) and run `git reset --hard <sha>` in `tracker_prod`, then rebuild + restart.
+- Future refinement: switching the API to compiled JS (Node on `server/dist/index.js`) removes the runtime dependency on `tsx`/devDependencies in prod and further simplifies the systemd unit.
+
 ## Environment and Configuration
 
 - Client (Vite) env files (not committed):
@@ -111,10 +139,35 @@ This guide documents how we use Git branches, environment files, and system serv
 
 ### Zero‑Downtime Static Swap (optional)
 
-- Prevent clients from ever seeing a partially written `dist/` during builds:
-  - `npm run build -- --outDir dist_next`
-  - `mv dist dist_prev && mv dist_next dist`
-  - Optionally: `rm -rf dist_prev`
+- Prevent clients from ever seeing a partially written `dist/` during builds by building to a temporary folder and atomically swapping it into place.
+
+Atomic swap (simple)
+- `npm run build -- --outDir dist_next`
+- Verify output exists: `test -f dist_next/index.html`
+- Swap: `mv dist dist_prev 2>/dev/null || true && mv dist_next dist`
+- (Optional) Clean up: `rm -rf dist_prev`
+
+Atomic swap (timestamped releases; easier rollback)
+```
+TS=$(date +%Y%m%d_%H%M%S)
+OUT="release_${TS}"
+npm run build -- --outDir "$OUT"
+test -f "$OUT/index.html" || { echo "Build missing index.html"; exit 1; }
+# Keep a backup of current dist as previous release
+PREV="prev_${TS}"; mv dist "$PREV" 2>/dev/null || true
+mv "$OUT" dist
+echo "Deployed $OUT (backup: $PREV)"
+# Optional: keep only last 3 backups
+ls -dt prev_* 2>/dev/null | tail -n +4 | xargs -r rm -rf
+```
+
+Rollback (timestamped variant)
+- List backups: `ls -dt prev_* | head`
+- Pick target (e.g., `prev_20251101_190000`) and run:
+  - `mv dist bad_$(date +%s) && mv prev_20251101_190000 dist`
+
+Notes
+- With the Nginx rules that set `Cache-Control: no-store` on `/index.html` and the SPA fallback, browsers fetch fresh HTML immediately after the swap; hashed assets under `/assets/` keep their long cache and filenames change per build.
 
 ## Database: Dev vs Prod
 
@@ -188,4 +241,3 @@ This guide documents how we use Git branches, environment files, and system serv
 ---
 
 If anything here becomes stale as the project evolves, update this document alongside the change so production stays smooth and predictable.
-

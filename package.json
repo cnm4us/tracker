@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:swap": "tsc -b && vite build --outDir dist_next && [ -f dist_next/index.html ] && (mv dist dist_prev 2>/dev/null || true) && mv dist_next dist",
     "build:analyze": "tsc -b && ANALYZE=1 vite build",
     "lint": "eslint .",
     "preview": "vite preview",
